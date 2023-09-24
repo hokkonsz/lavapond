@@ -1,0 +1,32 @@
+[package]
+name = "lavapond"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+ash = "0.37"
+bytemuck = { version = "1.13",  features = ["extern_crate_std"] }
+gpu-allocator = "0.21"
+winit = "0.28"
+raw-window-handle = "0.5"
+ash-window = "0.12"
+nalgebra-glm = "0.18"
+
+[features]
+default = ["render_dbg"]
+# Render Features
+render_dbg = ["validation_features"]
+validation_features = ["best_practices", "gpu_assist"] # <- Fill this with required validation features!
+# Validation Features List:
+best_practices = []
+debug_printf = []
+gpu_assist = []
+sync_validation = []
+
+
+
+[build-dependencies]
+glsl-to-spirv = "0.1"
