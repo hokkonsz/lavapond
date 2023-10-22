@@ -200,7 +200,7 @@ impl GraphicsPipeline {
         // TODO! Better/Nicer way?
         .into_iter()
         .next()
-        .context("Could not cretea the graphics pipeline")?
+        .context("Could not create the graphics pipeline")?
         .into_iter()
         .next()
         .context("Could not find the graphics pipeline")?;

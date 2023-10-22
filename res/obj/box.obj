@@ -1,0 +1,12 @@
+# Blender v2.90.1 OBJ File: 'box.blend'
+# www.blender.org
+mtllib box.mtl
+o Box_Plane
+v -0.100000 -0.100000 0.000000
+v 0.100000 -0.100000 0.000000
+v -0.100000 0.100000 0.000000
+v 0.100000 0.100000 0.000000
+usemtl None
+s off
+f 1 2 4
+f 4 3 1

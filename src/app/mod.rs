@@ -10,17 +10,13 @@ use winit::{
 };
 
 // Intern
-use crate::vulkan::Renderer;
-
-mod ui_elements;
-
-use ui_elements::*;
+use crate::vulkan::{self, AnchorType, Renderer};
 
 pub fn run() -> Result<()> {
     let event_loop = EventLoop::new();
 
     let window = WindowBuilder::new()
-        .with_title("Triangle")
+        .with_title("Lavapond")
         .with_inner_size(PhysicalSize::new(800u32, 600))
         .build(&event_loop)?;
 
@@ -30,22 +26,11 @@ pub fn run() -> Result<()> {
     let mut lmb_down = false;
     let mut last_mouse_pos: Option<PhysicalPosition<f64>> = None;
 
-    // Statistics
-    let mut frame_counter = FrameCounter::new();
-    let mut fps_text = String::from("FPS: -");
-
     event_loop.run(move |event, _, control_flow| {
         control_flow.set_poll();
 
         match event {
             Event::MainEventsCleared => {
-                frame_counter.count();
-
-                if frame_counter.changed() {
-                    renderer.draw_pool =
-                        renderer.text_box(&format!("FPS: {}", frame_counter.last_frame_count()));
-                }
-
                 res = control_flow.check_result(renderer.draw_request(&window));
             }
             Event::WindowEvent { event, .. } => match event {

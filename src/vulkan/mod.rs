@@ -102,7 +102,7 @@ impl Renderer {
 
     pub fn new(window: &winit::window::Window) -> Result<Renderer> {
         // Pre Load Object Pool
-        let object_pool = resources::load_obj("chars3")?;
+        let object_pool = resources::load_obj(&["chars", "box", "circle"])?;
 
         let window_size =
             winit::dpi::PhysicalSize::new(window.inner_size().width, window.inner_size().height);
@@ -477,11 +477,17 @@ impl Renderer {
             return Ok(());
         }
 
+        /////////////////// OBJECTS ///////////////////////////
+
+        self.circle(1.0, 0.0, 0.0, AnchorType::Unlocked)?;
+        self.rectangle(1.0, 0.3, 0.3, AnchorType::Unlocked)?;
+        self.circle(1.0, -0.3, -0.3, AnchorType::Unlocked)?;
+
         /////////////////// STATISTICS TEXT ///////////////////
         self.text(
             &self.render_stats.as_text(),
             1.0,
-            -1.0,
+            -1.5,
             0.75,
             AnchorType::Locked,
         )?;
@@ -712,6 +718,58 @@ impl Renderer {
     }
 
     /* Creating Draw Instances */
+
+    pub fn circle(
+        &mut self,
+        scale: f32,
+        center_x: f32,
+        center_y: f32,
+        anchor_type: AnchorType,
+    ) -> Result<()> {
+        let anchor_position = match anchor_type {
+            AnchorType::Locked => glm::vec3(
+                center_x + self.scene.camera_pos.x,
+                center_y + self.scene.camera_pos.y,
+                0.0,
+            ),
+            AnchorType::Unlocked => glm::vec3(center_x, center_y, 0.0),
+        };
+
+        self.draw_pool.push(ObjectInstance {
+            position: anchor_position,
+            rotation: 0.0,
+            scale,
+            object_index: self.object_pool.pool.len() - 1,
+        });
+
+        Ok(())
+    }
+
+    pub fn rectangle(
+        &mut self,
+        scale: f32,
+        center_x: f32,
+        center_y: f32,
+        anchor_type: AnchorType,
+    ) -> Result<()> {
+        let anchor_position = match anchor_type {
+            AnchorType::Locked => glm::vec3(
+                center_x + self.scene.camera_pos.x,
+                center_y + self.scene.camera_pos.y,
+                0.0,
+            ),
+            AnchorType::Unlocked => glm::vec3(center_x, center_y, 0.0),
+        };
+
+        self.draw_pool.push(ObjectInstance {
+            position: anchor_position,
+            rotation: 0.0,
+            scale,
+            object_index: self.object_pool.pool.len() - 2,
+        });
+
+        Ok(())
+    }
 
     pub fn text(
         &mut self,

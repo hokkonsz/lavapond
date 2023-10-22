@@ -7,9 +7,6 @@ use std::io::BufRead;
 extern crate nalgebra_glm as glm;
 use anyhow::{Ok, Result};
 
-// intern
-use super::Scene;
-
 //==================================================
 //=== Object
 //==================================================
@@ -18,6 +15,7 @@ const COLOR_WHITE: [f32; 3] = [1.0, 1.0, 1.0];
 const COLOR_GRAY: [f32; 3] = [0.5, 0.5, 0.5];
 const COLOR_BLACK: [f32; 3] = [0.0, 0.0, 0.0];
 
+#[derive(Debug)]
 pub struct ObjectPool {
     pub indices: Vec<u16>,
     pub vertices: Vec<Vertex>,
@@ -32,7 +30,7 @@ pub struct ObjectInstance {
     pub object_index: usize,
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ObjectData {
     pub name: String,
     pub index_count: usize,
@@ -52,7 +50,7 @@ struct VertexColor {
 }
 
 /// Load .obj file without .mtl file
-pub fn load_obj(obj_name: &str) -> Result<ObjectPool> {
+pub fn load_obj(obj_names: &[&str]) -> Result<ObjectPool> {
     let mut curr_line;
 
     /* 1. Load Vertices/Indices & Fill Object Pool*/
@@ -66,71 +64,76 @@ pub fn load_obj(obj_name: &str) -> Result<ObjectPool> {
         ..Vertex::default()
     };
     let mut index;
+    let mut object_index_offset = 0;
     let mut object_data = ObjectData::default();
 
-    let path = format!("res/obj/{}.obj", obj_name);
-    let file = std::fs::File::open(path)?;
-    for line in std::io::BufReader::new(file).lines() {
-        curr_line = line?;
+    for obj_name in obj_names {
+        let path = format!("res/obj/{}.obj", obj_name);
+        let file = std::fs::File::open(path)?;
+        for line in std::io::BufReader::new(file).lines() {
+            curr_line = line?;
 
-        if let Some(text) = curr_line.get(..2) {
-            match text {
-                "o " => {
-                    //"o Test_Cube.001" -> "X_Cube.001"
-                    if let Some(object_text) = curr_line.split(' ').next_back() {
-                        //"X_Cube.001" -> "X"
-                        if let Some(object_name) = object_text.chars().next() {
-                            // First Object -> Skip Save
-                            if object_data.name.len() == 0 {
+            if let Some(text) = curr_line.get(..2) {
+                match text {
+                    "o " => {
+                        //"o Test_Cube.001" -> "X_Cube.001"
+                        if let Some(object_text) = curr_line.split(' ').next_back() {
+                            //"X_Cube.001" -> "X"
+                            if let Some(object_name) = object_text.chars().next() {
+                                // First Object -> Skip Save
+                                if object_data.name.len() == 0 {
+                                    object_data.name = object_name.to_string();
+                                    continue;
+                                }
+
+                                // Save
+                                pool.push(object_data.clone());
                                 object_data.name = object_name.to_string();
+                                object_data.index_offset += object_data.index_count;
+                                object_data.index_count = 0;
+                            }
+                        }
+                    }
+                    "v " => {
+                        //"v 0.000000 0.000000 -7.000000" -> [0.0, 0.0, -7.0]
+                        for (i, value) in curr_line.split(' ').enumerate() {
+                            if i == 0 {
                                 continue;
                             }
 
-                            // Save
-                            pool.push(object_data.clone());
-                            object_data.name = object_name.to_string();
-                            object_data.index_offset += object_data.index_count;
-                            object_data.index_count = 0;
+                            if i > 3 {
+                                break;
+                            }
+
+                            vertex.position[i - 1] = value.parse::<f32>()?;
                         }
+
+                        vertices.push(vertex);
                     }
-                }
-                "v " => {
-                    //"v 0.000000 0.000000 -7.000000" -> [0.0, 0.0, -7.0]
-                    for (i, value) in curr_line.split(' ').enumerate() {
-                        if i == 0 {
-                            continue;
+                    "f " => {
+                        //"f 18 7 1" -> [18, 7, 1]
+                        for (i, value) in curr_line.split(' ').enumerate() {
+                            if i == 0 {
+                                continue;
+                            }
+
+                            if i > 3 {
+                                break;
+                            }
+
+                            index = value.parse::<u16>()? - 1;
+
+                            indices.push(object_index_offset as u16 + index);
                         }
 
-                        if i > 3 {
-                            break;
-                        }
-
-                        vertex.position[i - 1] = value.parse::<f32>()?;
+                        object_data.index_count += 3;
                     }
-
-                    vertices.push(vertex);
+                    _ => (),
                 }
-                "f " => {
-                    //"f 18 7 1" -> [18, 7, 1]
-                    for (i, value) in curr_line.split(' ').enumerate() {
-                        if i == 0 {
-                            continue;
-                        }
-
-                        if i > 3 {
-                            break;
-                        }
-
-                        index = value.parse::<u16>()? - 1;
-
-                        indices.push(index);
-                    }
-
-                    object_data.index_count += 3;
-                }
-                _ => (),
             }
         }
+
+        object_index_offset = vertices.len();
     }
 
     // Save Last Object
@@ -429,80 +432,20 @@ pub const CHAR_OBJECT_POOL: [u8; 255] = [
 //=== Shapes
 //==================================================
 
-pub struct Shapes {}
-
-impl Shapes {
-    pub const TRIANGLE_VERTICES: [Vertex; 3] = [
-        Vertex {
-            position: [0.0, -0.5, 0.0],
-            color: [1.0, 0.0, 0.0],
-        },
-        Vertex {
-            position: [0.5, 0.5, 0.0],
-            color: [1.0, 1.0, 0.0],
-        },
-        Vertex {
-            position: [-0.5, 0.5, 0.0],
-            color: [0.0, 0.0, 1.0],
-        },
-    ];
-
-    pub const TRIANGLE_INDICES: [u16; 3] = [0, 1, 2];
-
-    pub const SQUARE_VERTICES: [Vertex; 4] = [
-        Vertex {
-            position: [-0.5, -0.5, 0.0],
-            color: [1.0, 0.0, 0.0],
-        },
-        Vertex {
-            position: [0.5, -0.5, 0.0],
-            color: [1.0, 1.0, 0.0],
-        },
-        Vertex {
-            position: [0.5, 0.5, 0.0],
-            color: [0.0, 0.0, 1.0],
-        },
-        Vertex {
-            position: [-0.5, 0.5, 0.0],
-            color: [0.0, 1.0, 0.0],
-        },
-    ];
-
-    pub const SQUARE_INDICES: [u16; 6] = [
-        0, 1, 2, //
-        2, 3, 0,
-    ];
-}
+// TODO! -> Primitive shapes like Circle/Rectangle/Triangle
 
 //==================================================
-//=== Unit Test
+//=== Unit Testing
 //==================================================
 
 #[cfg(test)]
-
-mod tests_step {
-    use super::load_obj;
+mod tests {
+    use super::*;
 
     #[test]
-    fn test_object_loader() {
-        let x = load_obj("chars");
+    fn test_load_2obj() {
+        let obj = load_obj(&["box", "box", "box"]).unwrap();
 
-        assert!(x.is_ok());
+        dbg!(obj);
     }
 }
-
-////////////////////////////////////////////////////////////////
-// BENCHMARK
-// fn benchmark() -> () {
-//     let start_time = std::time::Instant::now();
-
-//     let obj = load_obj("monkey");
-
-//     match obj {
-//         Ok(_) => {
-//             let delta_time = (std::time::Instant::now() - start_time).as_micros();
-//             println!("[BENCHMARK] : SUCCESS = {} μs", delta_time);
-//         }
-//         Err(e) => {println!("[BENCHMARK] : ERROR = {}", e);}
-//     };
-// }
