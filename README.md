@@ -1,5 +1,4 @@
-
-# 🌋 lavapond
+![lavapond](https://github.com/hokkonsz/lavapond/assets/54407548/221d3589-282c-48cc-afa2-8181a0e7b332)
 
 [![dependency status](https://deps.rs/repo/github/hokkonsz/lavapond/status.svg)](https://deps.rs/repo/github/hokkonsz/lavapond)
 
