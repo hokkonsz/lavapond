@@ -20,7 +20,7 @@ nalgebra-glm = "0.18"
 rand = "0.8"
 
 [features]
-# default = ["render_dbg"]
+default = ["render_dbg"]
 # Render Features
 render_dbg = ["validation_features"]
 validation_features = ["best_practices", "gpu_assist"] # <- Fill this with required validation features!

@@ -49,6 +49,7 @@ struct VertexColor {
     pub color: [f32; 3],
 }
 
+/// Preload Object Pool
 pub fn preload() -> Result<ObjectPool> {
     load_obj_files(&["chars", "rectangle", "circle"])
 }
