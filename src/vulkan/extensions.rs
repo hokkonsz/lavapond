@@ -20,6 +20,7 @@ pub struct DebugExtension {
 }
 
 impl DebugExtension {
+    /// Creates a new [`DebugExtension`]
     pub fn new(entry: &ash::Entry, instance: &ash::Instance) -> Result<Self> {
         let loader = ext::DebugUtils::new(entry, instance);
 
@@ -44,6 +45,7 @@ impl DebugExtension {
     }
 }
 
+/// Callback function for debug messenger
 unsafe extern "system" fn vulkan_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -82,6 +84,7 @@ pub struct SurfaceExtension {
 }
 
 impl SurfaceExtension {
+    /// Creates a new [`SurfaceExtension`]
     pub fn new(
         entry: &ash::Entry,
         instance: &ash::Instance,
@@ -113,6 +116,7 @@ pub struct SwapchainExtension {
 }
 
 impl SwapchainExtension {
+    /// Creates a new [`SwapchainExtension`]
     pub fn new(
         entry: &ash::Entry,
         instance: &ash::Instance,

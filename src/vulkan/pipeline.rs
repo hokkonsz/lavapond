@@ -16,6 +16,7 @@ pub struct GraphicsPipeline {
 }
 
 impl GraphicsPipeline {
+    /// Creates a new [`GraphicsPipeline`]
     pub fn new(
         logical_device: &ash::Device,
         descriptor_set_layout: &vk::DescriptorSetLayout,

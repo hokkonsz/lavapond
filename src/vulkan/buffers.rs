@@ -12,6 +12,7 @@ pub struct CommandBuffer {
 }
 
 impl CommandBuffer {
+    /// Creates a new (Draw) [`CommandBuffer`]
     pub fn new_draw_cmd_buffer(
         logical_device: &ash::Device,
         queue_family_index: u32,
@@ -37,6 +38,11 @@ impl CommandBuffer {
         Ok(Self { pool, buffers })
     }
 
+    /// Copy the data of a buffer into another one
+    ///
+    /// Using:
+    /// * Transient Command Pool (Buffers with short lifetime)
+    /// * Onetime Submit Command Buffers
     pub fn buffer_copy(
         logical_device: &ash::Device,
         queue: &vk::Queue,
@@ -114,6 +120,7 @@ pub struct FrameBuffer {
 }
 
 impl FrameBuffer {
+    /// Creates a new [`FrameBuffer`]
     pub fn new(
         logical_device: &ash::Device,
         image_views: &Vec<vk::ImageView>,
@@ -155,6 +162,12 @@ pub struct StorageBuffer {
 }
 
 impl StorageBuffer {
+    /// Creates a new [`StorageBuffer`]
+    ///
+    /// Buffer Creation Steps:
+    /// 1. Stage data using staging buffer
+    /// 2. Create storage buffer
+    /// 3. Copy data from staging buffer to storage buffer
     pub fn new<T: Copy>(
         logical_device: &ash::Device,
         device_mem_properties: &vk::PhysicalDeviceMemoryProperties,
@@ -283,6 +296,9 @@ impl StorageBuffer {
         })
     }
 
+    /// Update the data stored in [`StorageBuffer`]
+    ///
+    /// Similar to creation, but without storage buffer creation
     pub fn update<T: Copy>(
         &self,
         logical_device: &ash::Device,

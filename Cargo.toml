@@ -2,6 +2,9 @@
 name = "lavapond"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/hokkonsz/lavapond"
+license = "MIT"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -9,14 +12,15 @@ edition = "2021"
 anyhow = "1.0"
 ash = "0.37"
 bytemuck = { version = "1.13",  features = ["extern_crate_std"] }
-gpu-allocator = "0.21"
+gpu-allocator = "0.23"
 winit = "0.28"
 raw-window-handle = "0.5"
 ash-window = "0.12"
 nalgebra-glm = "0.18"
+rand = "0.8"
 
 [features]
-default = ["render_dbg"]
+# default = ["render_dbg"]
 # Render Features
 render_dbg = ["validation_features"]
 validation_features = ["best_practices", "gpu_assist"] # <- Fill this with required validation features!

@@ -49,8 +49,12 @@ struct VertexColor {
     pub color: [f32; 3],
 }
 
+pub fn preload() -> Result<ObjectPool> {
+    load_obj_files(&["chars", "rectangle", "circle"])
+}
+
 /// Load .obj file without .mtl file
-pub fn load_obj(obj_names: &[&str]) -> Result<ObjectPool> {
+pub fn load_obj_files(obj_names: &[&str]) -> Result<ObjectPool> {
     let mut curr_line;
 
     /* 1. Load Vertices/Indices & Fill Object Pool*/
@@ -146,7 +150,7 @@ pub fn load_obj(obj_names: &[&str]) -> Result<ObjectPool> {
     })
 }
 
-/// Load .obj file with .mtl file
+/// Load a single .obj file with .mtl file
 pub fn load_obj_with_mtl(obj_name: &str) -> Result<ObjectPool> {
     let mut curr_line;
 
@@ -296,7 +300,7 @@ pub fn load_obj_with_mtl(obj_name: &str) -> Result<ObjectPool> {
 // This maps the ASCII Char decimal number to the objects in char.obj
 // Probably can be compile time filled with proc macro, i think...
 // Special Cases:
-// #        Draw
+// [#]      [Draw]
 // 255  ->  Nothing
 // 254  ->  Space
 // 253  ->  New Line
@@ -444,7 +448,7 @@ mod tests {
 
     #[test]
     fn test_load_2obj() {
-        let obj = load_obj(&["box", "box", "box"]).unwrap();
+        let obj = load_obj_files(&["box", "box", "box"]).unwrap();
 
         dbg!(obj);
     }

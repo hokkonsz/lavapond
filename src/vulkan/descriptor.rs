@@ -13,6 +13,7 @@ pub struct Descriptor {
 }
 
 impl Descriptor {
+    /// Creates a new [`Descriptor`]
     pub fn new(logical_device: &ash::Device, max_frames_inflight: usize) -> Result<Self> {
         let set_layout = {
             let layout_binding = vk::DescriptorSetLayoutBinding::builder()
@@ -55,6 +56,7 @@ impl Descriptor {
         })
     }
 
+    /// Updates the current descriptor sets with buffer data
     pub fn update_descriptor_sets(
         &self,
         logical_device: &ash::Device,

@@ -43,8 +43,8 @@ pub struct Renderer {
     image_views: Vec<vk::ImageView>,
 
     // Vulkan: Extensions
-    debug_utils_loader: ext::DebugUtils,
-    debug_messenger: vk::DebugUtilsMessengerEXT,
+    debug_utils_loader: Option<ext::DebugUtils>,
+    debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
     surface_loader: khr::Surface,
     surface: vk::SurfaceKHR,
     swapchain_loader: khr::Swapchain,
@@ -100,9 +100,10 @@ impl Renderer {
         },
     }];
 
+    /// Creates a new [`Renderer`] using `window`
     pub fn new(window: &winit::window::Window) -> Result<Renderer> {
         // Pre Load Object Pool
-        let object_pool = resources::load_obj(&["chars", "box", "circle"])?;
+        let object_pool = resources::preload()?;
 
         let window_size =
             winit::dpi::PhysicalSize::new(window.inner_size().width, window.inner_size().height);
@@ -113,7 +114,14 @@ impl Renderer {
         let instance = create_instance(&entry, &window)?;
 
         // Extensions: Debug & Surface
-        let debug_ext = DebugExtension::new(&entry, &instance)?;
+        #[cfg(not(feature = "render_dbg"))]
+        let (debug_ext_loader, debug_ext_messenger) = (None, None);
+
+        #[cfg(feature = "render_dbg")]
+        let (debug_ext_loader, debug_ext_messenger) = {
+            let debug_ext = DebugExtension::new(&entry, &instance)?;
+            (Some(debug_ext.loader), Some(debug_ext.messenger))
+        };
 
         let surface_ext = SurfaceExtension::new(&entry, &instance, &window)?;
 
@@ -306,8 +314,8 @@ impl Renderer {
             image_views,
 
             // Extensions
-            debug_utils_loader: debug_ext.loader,
-            debug_messenger: debug_ext.messenger,
+            debug_utils_loader: debug_ext_loader,
+            debug_messenger: debug_ext_messenger,
             surface_loader: surface_ext.loader,
             surface: surface_ext.surface,
             swapchain_loader: swapchain_ext.loader,
@@ -357,6 +365,9 @@ impl Renderer {
 
     /* Swapchain */
 
+    /// Recreates the [`Swapchain`] based on the `new_size`
+    ///
+    /// Recration occurs only when `new_size` is valid
     pub fn recreate_swapchain(&mut self, new_size: PhysicalSize<u32>) -> Result<()> {
         // Window Minimized -> No Recreation
         if new_size.height == 0 || new_size.width == 0 {
@@ -471,17 +482,16 @@ impl Renderer {
 
     /* Drawing */
 
+    /// Submits multiple draw commands to graphics queue based on the current `draw_pool` in
+    ///
+    /// 1. Fill `draw_pool` with objects to draw
+    /// 2. Call `draw_request` function to submit draw
+    /// 3. The `draw_pool` are cleared after submission
     pub fn draw_request(&mut self, window: &winit::window::Window) -> Result<()> {
         // Window Minimized -> No Draw
         if window.inner_size().height == 0 || window.inner_size().width == 0 {
             return Ok(());
         }
-
-        /////////////////// OBJECTS ///////////////////////////
-
-        self.circle(1.0, 0.0, 0.0, AnchorType::Unlocked)?;
-        self.rectangle(1.0, 0.3, 0.3, AnchorType::Unlocked)?;
-        self.circle(1.0, -0.3, -0.3, AnchorType::Unlocked)?;
 
         /////////////////// STATISTICS TEXT ///////////////////
         self.text(
@@ -678,6 +688,12 @@ impl Renderer {
         Ok(())
     }
 
+    /// For each `draw_instance` in the [`Renderer`]'s `draw_pool`
+    /// * Creates an a transformation matrix based on the instance's position, rototation and scale
+    /// * Adds a push constant
+    /// * Adds an indexed draw command
+    ///
+    /// Used only internally by draw_request function!
     fn draw_from_pool(&mut self) -> Result<()> {
         let mut object_transform: glm::Mat4;
 
@@ -719,6 +735,7 @@ impl Renderer {
 
     /* Creating Draw Instances */
 
+    /// Creates and pushes a circle object to draw
     pub fn circle(
         &mut self,
         scale: f32,
@@ -745,6 +762,7 @@ impl Renderer {
         Ok(())
     }
 
+    /// Creates and pushes a rectangle object to draw
     pub fn rectangle(
         &mut self,
         scale: f32,
@@ -771,6 +789,7 @@ impl Renderer {
         Ok(())
     }
 
+    /// Creates and pushes a text object to draw
     pub fn text(
         &mut self,
         text: &str,
@@ -832,6 +851,7 @@ impl Renderer {
 
     /* Render Statistics */
 
+    /// Updates the render statistics structure based on the time elapsed
     fn update_render_stats(&mut self) -> () {
         if self.render_stats.turned_off {
             return;
@@ -866,10 +886,14 @@ impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
             self.device.device_wait_idle();
+
+            // Buffers: Index & Vertex
             self.device.destroy_buffer(self.index_buffer, None);
             self.device.free_memory(self.index_buffer_memory, None);
             self.device.destroy_buffer(self.vertex_buffer, None);
             self.device.free_memory(self.vertex_buffer_memory, None);
+
+            // Syncronisation
             self.semaphores_acquire.clone().into_iter().for_each(|s| {
                 self.device.destroy_semaphore(s, None);
             });
@@ -879,7 +903,11 @@ impl Drop for Renderer {
             self.fences_inflight.clone().into_iter().for_each(|f| {
                 self.device.destroy_fence(f, None);
             });
+
+            // Command Pool
             self.device.destroy_command_pool(self.command_pool, None);
+
+            // Buffers: Frame & Uniform
             self.frame_buffers
                 .clone()
                 .into_iter()
@@ -892,6 +920,8 @@ impl Drop for Renderer {
                 .clone()
                 .into_iter()
                 .for_each(|dm| self.device.free_memory(dm, None));
+
+            // Descriptors & Pipeline
             self.device
                 .destroy_descriptor_pool(self.descriptor_pool, None);
             self.device
@@ -904,17 +934,29 @@ impl Drop for Renderer {
                 .clone() // TODO! -> Potential fix here, but cloning Handles should be OK
                 .into_iter()
                 .for_each(|iv| self.device.destroy_image_view(iv, None));
+
+            // Extensions: Swapchain & Surface
             self.swapchain_loader
                 .destroy_swapchain(self.swapchain, None);
             self.surface_loader.destroy_surface(self.surface, None);
+
+            // Device
             self.device.destroy_device(None);
-            self.debug_utils_loader
-                .destroy_debug_utils_messenger(self.debug_messenger, None);
+
+            // Extension: Debug
+            if let (Some(debug_utils_loader), Some(debug_messenger)) =
+                (&self.debug_utils_loader, self.debug_messenger)
+            {
+                debug_utils_loader.destroy_debug_utils_messenger(debug_messenger, None);
+            };
+
+            // Instance
             self.instance.destroy_instance(None);
         }
     }
 }
 
+/// Cretes a Vulkan Instance using the given `entry` and `window`
 pub fn create_instance(
     entry: &ash::Entry,
     window: &winit::window::Window,
@@ -992,6 +1034,8 @@ struct Device {
 impl Device {
     // TODO! -> This is too strict right now, better to rank surface properties
     // TODO! -> Capability Support: image count + image extent
+
+    /// Creates a new device using the given `instance` and `surface_ext
     fn new(instance: &ash::Instance, surface_ext: &SurfaceExtension) -> Result<Self> {
         /*Find Physical Device*/
         let mut physical_device = None;
@@ -1128,7 +1172,7 @@ impl Device {
                     .queue_family_index(present_queue_index)
                     .queue_priorities(&queue_priority)
                     .build(),
-                // // Transfer Queue
+                // Transfer Queue
                 // vk::DeviceQueueCreateInfo::builder()
                 //     .queue_family_index(transfer_queue_index)
                 //     .queue_priorities(&queue_priority)
@@ -1174,9 +1218,10 @@ struct RenderStats {
 }
 
 impl RenderStats {
+    /// Creates a new render statistics
     fn new() -> Self {
         Self {
-            turned_off: false,
+            turned_off: true, // false
             frames_per_sec: 0,
             last_draw_request_time: 0,
             last_draw_pool_creation_time: 0,
@@ -1190,6 +1235,7 @@ impl RenderStats {
         }
     }
 
+    /// Starts the timer of draw request
     fn start_draw_request_timer(&mut self) -> () {
         if self.turned_off {
             return;
@@ -1198,6 +1244,7 @@ impl RenderStats {
         self.draw_request_instant = Instant::now();
     }
 
+    /// Stops the timer of draw request
     fn stop_draw_request_timer(&mut self) -> () {
         if self.turned_off {
             return;
@@ -1207,6 +1254,7 @@ impl RenderStats {
         self.changed = true;
     }
 
+    /// Starts the timer of pool creation
     fn start_pool_creation_timer(&mut self) -> () {
         if self.turned_off {
             return;
@@ -1215,6 +1263,7 @@ impl RenderStats {
         self.pool_creation_instant = Instant::now();
     }
 
+    /// Stops the timer of pool creation
     fn stop_pool_creation_timer(&mut self) -> () {
         if self.turned_off {
             return;
@@ -1224,6 +1273,7 @@ impl RenderStats {
         self.changed = true;
     }
 
+    /// Gives back the current stats as a [`String`]
     fn as_text(&self) -> String {
         format!("[Statistics]\nfps: {}\nrequest time: {} us\npool creation time:{}\nelements:{}\nvertices:{}", 
         self.frames_per_sec,
@@ -1255,6 +1305,7 @@ pub struct Scene {
 }
 
 impl Scene {
+    /// Creates a new [`Scene`] based on the current windows size
     pub fn new(window: &winit::window::Window, projection_type: ProjectionType) -> Self {
         let aspect = (window.inner_size().width / window.inner_size().height) as f32;
         let camera_pos = glm::vec3(0.0, 0.0, 2.0);
@@ -1268,10 +1319,12 @@ impl Scene {
         }
     }
 
+    /// Change the current zoom level with the value of `delta`
     pub fn zoom(&mut self, delta: f32) -> () {
         self.camera_zoom = f32::clamp(self.camera_zoom + delta, 0.1, 2.0);
     }
 
+    /// Pan the came on the X and Y axis
     pub fn pan_view_xy(&mut self, x: f32, y: f32) -> () {
         self.camera_pos = glm::vec3(
             self.camera_pos.x + x,
@@ -1286,11 +1339,14 @@ impl Scene {
         );
     }
 
+    /// Updates the projection matrix of the camera
+    ///
+    /// If the camera is fix then we do not need to call this function
     pub fn update_projection(&mut self, window: &winit::window::Window) -> () {
         //let n = 2.0 * self.camera_zoom;
 
-        let target_width = 3.0;
-        let target_height = 4.0;
+        let target_width = 4.0;
+        let target_height = 3.0;
         let target_aspect = target_width / target_height;
         let viewport_aspect =
             (window.inner_size().width as f32) / (window.inner_size().height as f32);
@@ -1334,6 +1390,7 @@ pub struct CameraVP {
 }
 
 impl CameraVP {
+    /// Creates a new [`CameraVP`]
     pub fn new(position: &glm::Vec3, projection_type: &ProjectionType, aspect: f32) -> Self {
         let mut projection = match projection_type {
             ProjectionType::Orthographic => {

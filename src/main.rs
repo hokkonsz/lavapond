@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod app;
+mod physics;
 mod vulkan;
 
 fn main() -> () {
