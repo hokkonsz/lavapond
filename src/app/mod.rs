@@ -3,7 +3,9 @@
 use std::time::Instant;
 
 // Extern
+extern crate nalgebra_glm as glm;
 use anyhow::Result;
+use rand::{self, Rng, RngCore};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
@@ -42,12 +44,52 @@ pub fn run() -> Result<()> {
     let mut renderer = Renderer::new(&window)?;
     let mut res: Result<()> = Ok(());
 
+    // Random Generator
+    let mut rng = rand::thread_rng();
+
     ///////////////// DEBUG /////////////////
     let mut last_creation_pos: PhysicalPosition<f64> = PhysicalPosition::new(0.0, 0.0);
 
-    physics_system.circle(0.1, 0.0, 0.0, 0.0, 0.0);
-    physics_system.circle(0.1, -1.0, -1.0, 0.0, 0.0);
-    physics_system.circle(0.1, 1.0, 1.0, 0.0, 0.0);
+    physics_system.arena(
+        glm::vec2(10.0, 10.0),
+        glm::vec2(0.0, 0.0),
+        glm::vec2(0.0, 0.0),
+        glm::vec3(0.2, 0.2, 0.2),
+    );
+
+    physics_system.circle(
+        0.1,
+        glm::vec2(0.0, 0.0),
+        glm::vec2(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0)),
+        glm::vec3(
+            rng.gen_range(0.0..1.0),
+            rng.gen_range(0.0..1.0),
+            rng.gen_range(0.0..1.0),
+        ),
+    );
+
+    physics_system.circle(
+        0.1,
+        glm::vec2(-0.8, -0.8),
+        glm::vec2(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0)),
+        glm::vec3(
+            rng.gen_range(0.0..1.0),
+            rng.gen_range(0.0..1.0),
+            rng.gen_range(0.0..1.0),
+        ),
+    );
+
+    physics_system.circle(
+        0.1,
+        glm::vec2(0.8, 0.8),
+        glm::vec2(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0)),
+        glm::vec3(
+            rng.gen_range(0.0..1.0),
+            rng.gen_range(0.0..1.0),
+            rng.gen_range(0.0..1.0),
+        ),
+    );
+
     ///////////////// DEBUG /////////////////
 
     event_loop.run(move |event, _, control_flow| {
@@ -60,27 +102,23 @@ pub fn run() -> Result<()> {
                 // Draw Objects From Physics System Models
                 for model in &physics_system.models {
                     match model.model_type {
-                        ModelType::Circle(r) => {
+                        ModelType::Circle(radius, color) => {
                             renderer.circle(
-                                r * 2.0,
+                                radius * 2.0,
                                 model.position.x,
                                 model.position.y,
+                                color,
                                 AnchorType::Unlocked,
                             );
                         }
-                        ModelType::Rectangle(a, b) => {
+                        ModelType::Arena(x, y, color) => {
                             renderer.rectangle(
-                                1.0,
+                                x,
+                                y,
+                                0.0,
                                 model.position.x,
                                 model.position.y,
-                                AnchorType::Locked,
-                            );
-                        }
-                        ModelType::Arena(a, b) => {
-                            renderer.rectangle(
-                                1.0,
-                                model.position.x,
-                                model.position.y,
+                                color,
                                 AnchorType::Locked,
                             );
                         }
@@ -110,7 +148,19 @@ pub fn run() -> Result<()> {
                                 let y = -((2.0 * (mouse_pos.y - center_pos.y) - window_height)
                                     / window_height) as f32;
 
-                                physics_system.circle(0.1, x as f32, y as f32, 0.0, 0.0);
+                                physics_system.circle(
+                                    rng.gen_range(0.1..0.5),
+                                    glm::vec2(x, y),
+                                    glm::vec2(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0)),
+                                    glm::vec3(
+                                        rng.gen_range(0.0..1.0),
+                                        rng.gen_range(0.0..1.0),
+                                        rng.gen_range(0.0..1.0),
+                                    ),
+                                );
+                            }
+                            VirtualKeyCode::Space if input.state == ElementState::Released => {
+                                physics_system.switch_state()
                             }
                             _ => (),
                         }

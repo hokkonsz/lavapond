@@ -1,3 +1,7 @@
+// std
+use std::time::Instant;
+
+// extern
 extern crate nalgebra_glm as glm;
 
 pub struct PhysicsSystem {
@@ -12,63 +16,64 @@ impl PhysicsSystem {
         Self {
             models: vec![],
             instant: Instant::now(),
-            simulation_state: SimulationState::Run,
+            simulation_state: SimulationState::Paused,
         }
     }
 
     /// Adds a `Circle` model to [`PhysicsSystem`]
-    pub fn circle(&mut self, r: f32, pos_x: f32, pos_y: f32, velo_x: f32, velo_y: f32) -> () {
-        self.models.push(Model {
-            position: glm::vec2(pos_x, pos_y),
-            velocity: glm::vec2(velo_x, velo_y),
-            acceleration: glm::vec2(0.0, 0.0),
-            model_type: ModelType::Circle(r),
-        });
-    }
-
-    /// Adds a `Rectangle` model to [`PhysicsSystem`]
-    pub fn rectangle(
+    pub fn circle(
         &mut self,
-        a: f32,
-        b: f32,
-        pos_x: f32,
-        pos_y: f32,
-        velo_x: f32,
-        velo_y: f32,
+        radius: f32,
+        position: glm::Vec2,
+        velocity: glm::Vec2,
+        color: glm::Vec3,
     ) -> () {
         self.models.push(Model {
-            position: glm::vec2(pos_x, pos_y),
-            velocity: glm::vec2(velo_x, velo_y),
+            position,
+            velocity,
             acceleration: glm::vec2(0.0, 0.0),
-            model_type: ModelType::Rectangle(a, b),
+            model_type: ModelType::Circle(radius, color),
         });
     }
 
     /// Adds a `Arena` model to [`PhysicsSystem`]
     pub fn arena(
         &mut self,
-        a: f32,
-        b: f32,
-        pos_x: f32,
-        pos_y: f32,
-        velo_x: f32,
-        velo_y: f32,
+        sides: glm::Vec2,
+        position: glm::Vec2,
+        velocity: glm::Vec2,
+        color: glm::Vec3,
     ) -> () {
         self.models.push(Model {
-            position: glm::vec2(pos_x, pos_y),
-            velocity: glm::vec2(velo_x, velo_y),
+            position,
+            velocity,
             acceleration: glm::vec2(0.0, 0.0),
-            model_type: ModelType::Arena(a, b),
+            model_type: ModelType::Arena(sides.x, sides.y, color),
         });
     }
 
     /// Updates the models in the [`PhysicsSystem`] based on the elapsed time
     pub fn update(&mut self) -> () {
         if self.simulation_state == SimulationState::Paused {
+            self.instant = Instant::now();
             return;
         }
 
         for model in self.models.as_mut_slice() {
+            // X Axis
+            if (model.position.x - model.x_range() <= -1.0)
+                || model.position.x + model.x_range() >= 1.0
+            {
+                model.velocity.x *= -1.0;
+            }
+
+            // Y Axis
+            if (model.position.y - model.y_range() <= -1.0)
+                || model.position.y + model.y_range() >= 1.0
+            {
+                model.velocity.y *= -1.0;
+            }
+
             model.position += model.velocity * self.instant.elapsed().as_secs_f32();
         }
 
@@ -76,15 +81,38 @@ impl PhysicsSystem {
     }
 
     /// Switches the [`SimulationState`] to `Run`
-    pub fn run(&mut self) -> () {
+    pub fn set_run(&mut self) -> () {
         self.simulation_state = SimulationState::Run;
     }
 
     /// Switches the [`SimulationState`] to `Paused`
-    pub fn pause(&mut self) -> () {
+    pub fn set_pause(&mut self) -> () {
         self.simulation_state = SimulationState::Run;
     }
+
+    /// Switches between `Paused` and `Run` [`SimulationState`]s
+    pub fn switch_state(&mut self) -> () {
+        match self.simulation_state {
+            SimulationState::Run => self.simulation_state = SimulationState::Paused,
+            SimulationState::Paused => self.simulation_state = SimulationState::Run,
+        }
+    }
 }
+
+#[derive(PartialEq)]
+pub enum SimulationState {
+    Run,
+    Paused,
+}
+
+//==================================================
+//=== Model
+//==================================================
+
+use f32 as Radius;
+use f32 as X_side;
+use f32 as Y_side;
+use glm::Vec3 as Color;
 
 pub struct Model {
     pub position: glm::Vec2,
@@ -93,20 +121,23 @@ pub struct Model {
     pub model_type: ModelType,
 }
 
-use std::time::Instant;
+impl Model {
+    pub fn x_range(&self) -> f32 {
+        match self.model_type {
+            ModelType::Circle(r, ..) => r * 0.1,
+            ModelType::Arena(x, ..) => x * 0.5 * 0.1,
+        }
+    }
 
-use f32 as radius;
-use f32 as a_side;
-use f32 as b_side;
-
-pub enum ModelType {
-    Circle(radius),
-    Rectangle(a_side, b_side),
-    Arena(a_side, b_side),
+    pub fn y_range(&self) -> f32 {
+        match self.model_type {
+            ModelType::Circle(r, ..) => r * 0.1,
+            ModelType::Arena(_, y, _) => y / 2.0,
+        }
+    }
 }
 
-#[derive(PartialEq)]
-pub enum SimulationState {
-    Run,
-    Paused,
+pub enum ModelType {
+    Circle(Radius, Color),
+    Arena(X_side, Y_side, Color),
 }

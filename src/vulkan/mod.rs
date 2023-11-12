@@ -185,7 +185,7 @@ impl Renderer {
         // Push Constants
         let push_constant_range = vk::PushConstantRange::builder()
             .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .size(std::mem::size_of::<glm::Mat4>() as u32)
+            .size(std::mem::size_of::<DrawInstanceData>() as u32)
             .offset(0)
             .build();
 
@@ -493,12 +493,21 @@ impl Renderer {
             return Ok(());
         }
 
-        /////////////////// STATISTICS TEXT ///////////////////
+        /////////////////// STATISTICS DRAW ///////////////////
+        self.rectangle(
+            4.5,
+            1.75,
+            0.0,
+            -1.7,
+            0.85,
+            glm::vec3(0.5, 0.5, 0.5),
+            AnchorType::Locked,
+        )?;
         self.text(
             &self.render_stats.as_text(),
             1.0,
-            -1.5,
-            0.75,
+            -2.0,
+            1.0,
             AnchorType::Locked,
         )?;
 
@@ -695,10 +704,10 @@ impl Renderer {
     ///
     /// Used only internally by draw_request function!
     fn draw_from_pool(&mut self) -> Result<()> {
-        let mut object_transform: glm::Mat4;
+        let mut draw_instance_data = DrawInstanceData::new_empty();
 
         for draw_instance in &self.draw_pool {
-            object_transform = glm::translate(
+            draw_instance_data.transform = glm::translate(
                 &glm::Mat4::identity(),
                 &draw_instance.position, // Object Position
             ) * glm::rotate(
@@ -707,8 +716,10 @@ impl Renderer {
                 &glm::vec3(0.0, 0.0, 1.0),             // Axis of Rotation
             ) * glm::scale(
                 &glm::Mat4::identity(),
-                &glm::Vec3::from_element(draw_instance.scale), // Scale Factors
+                &draw_instance.scale, // Scale Factors
             );
+
+            draw_instance_data.color = draw_instance.color;
 
             unsafe {
                 self.device.cmd_push_constants(
@@ -716,7 +727,7 @@ impl Renderer {
                     self.pipeline_layout,
                     vk::ShaderStageFlags::VERTEX,
                     0,
-                    &bytemuck::try_cast_slice(object_transform.as_slice())?,
+                    &bytemuck::try_cast_slice(&draw_instance_data.as_slice())?,
                 );
 
                 self.device.cmd_draw_indexed(
@@ -734,60 +745,6 @@ impl Renderer {
     }
 
     /* Creating Draw Instances */
-
-    /// Creates and pushes a circle object to draw
-    pub fn circle(
-        &mut self,
-        scale: f32,
-        center_x: f32,
-        center_y: f32,
-        anchor_type: AnchorType,
-    ) -> Result<()> {
-        let anchor_position = match anchor_type {
-            AnchorType::Locked => glm::vec3(
-                center_x + self.scene.camera_pos.x,
-                center_y + self.scene.camera_pos.y,
-                0.0,
-            ),
-            AnchorType::Unlocked => glm::vec3(center_x, center_y, 0.0),
-        };
-
-        self.draw_pool.push(ObjectInstance {
-            position: anchor_position,
-            rotation: 0.0,
-            scale,
-            object_index: self.object_pool.pool.len() - 1,
-        });
-
-        Ok(())
-    }
-
-    /// Creates and pushes a rectangle object to draw
-    pub fn rectangle(
-        &mut self,
-        scale: f32,
-        center_x: f32,
-        center_y: f32,
-        anchor_type: AnchorType,
-    ) -> Result<()> {
-        let anchor_position = match anchor_type {
-            AnchorType::Locked => glm::vec3(
-                center_x + self.scene.camera_pos.x,
-                center_y + self.scene.camera_pos.y,
-                0.0,
-            ),
-            AnchorType::Unlocked => glm::vec3(center_x, center_y, 0.0),
-        };
-
-        self.draw_pool.push(ObjectInstance {
-            position: anchor_position,
-            rotation: 0.0,
-            scale,
-            object_index: self.object_pool.pool.len() - 2,
-        });
-
-        Ok(())
-    }
 
     /// Creates and pushes a text object to draw
     pub fn text(
@@ -834,7 +791,7 @@ impl Renderer {
             if char_index != 254 {
                 text_instance_pool.push(ObjectInstance {
                     position: cursor_position,
-                    scale: scale,
+                    scale: glm::vec3(scale, scale, 0.0),
                     object_index: char_index as usize,
                     ..ObjectInstance::default()
                 });
@@ -845,6 +802,66 @@ impl Renderer {
         }
 
         self.draw_pool.extend(text_instance_pool);
+
+        Ok(())
+    }
+
+    /// Creates and pushes a circle object to draw
+    pub fn circle(
+        &mut self,
+        scale: f32,
+        center_x: f32,
+        center_y: f32,
+        color: glm::Vec3,
+        anchor_type: AnchorType,
+    ) -> Result<()> {
+        let anchor_position = match anchor_type {
+            AnchorType::Locked => glm::vec3(
+                center_x + self.scene.camera_pos.x,
+                center_y + self.scene.camera_pos.y,
+                0.0,
+            ),
+            AnchorType::Unlocked => glm::vec3(center_x, center_y, 0.0),
+        };
+
+        self.draw_pool.push(ObjectInstance {
+            position: anchor_position,
+            rotation: 0.0, // <- Matters only if has a texture
+            scale: glm::vec3(scale, scale, 0.0),
+            color,
+            object_index: self.object_pool.pool.len() - 1,
+        });
+
+        Ok(())
+    }
+
+    /// Creates and pushes a rectangle object to draw
+    pub fn rectangle(
+        &mut self,
+        scale_x: f32,
+        scale_y: f32,
+        rotation: f32,
+        center_x: f32,
+        center_y: f32,
+        color: glm::Vec3,
+        anchor_type: AnchorType,
+    ) -> Result<()> {
+        let anchor_position = match anchor_type {
+            AnchorType::Locked => glm::vec3(
+                center_x + self.scene.camera_pos.x,
+                center_y + self.scene.camera_pos.y,
+                0.0,
+            ),
+            AnchorType::Unlocked => glm::vec3(center_x, center_y, 0.0),
+        };
+
+        self.draw_pool.push(ObjectInstance {
+            position: anchor_position,
+            rotation: rotation,
+            scale: glm::vec3(scale_x, scale_y, 0.0),
+            color,
+            object_index: self.object_pool.pool.len() - 2,
+        });
 
         Ok(())
     }
@@ -863,8 +880,6 @@ impl Renderer {
 
             self.render_stats.frame_counter = 0;
             self.render_stats.fps_instant = Instant::now();
-
-            self.render_stats.changed = true;
         } else {
             self.render_stats.frame_counter += 1;
         }
@@ -872,12 +887,10 @@ impl Renderer {
         // Update Pool Stats
         if self.render_stats.last_draw_pool_elements != self.draw_pool.len() {
             self.render_stats.last_draw_pool_elements = self.draw_pool.len();
-            self.render_stats.changed = true;
         }
 
         if self.render_stats.last_draw_pool_vertices != self.object_pool.vertices.len() {
             self.render_stats.last_draw_pool_vertices = self.object_pool.vertices.len();
-            self.render_stats.changed = true;
         }
     }
 }
@@ -1210,7 +1223,6 @@ struct RenderStats {
     last_draw_pool_creation_time: u128,
     last_draw_pool_elements: usize,
     last_draw_pool_vertices: usize,
-    changed: bool,
     frame_counter: u32,
     fps_instant: Instant,
     draw_request_instant: Instant,
@@ -1221,13 +1233,12 @@ impl RenderStats {
     /// Creates a new render statistics
     fn new() -> Self {
         Self {
-            turned_off: true, // false
+            turned_off: false,
             frames_per_sec: 0,
             last_draw_request_time: 0,
             last_draw_pool_creation_time: 0,
             last_draw_pool_elements: 0,
             last_draw_pool_vertices: 0,
-            changed: false,
             frame_counter: 0,
             fps_instant: Instant::now(),
             draw_request_instant: Instant::now(),
@@ -1251,7 +1262,6 @@ impl RenderStats {
         }
 
         self.last_draw_request_time = self.draw_request_instant.elapsed().as_micros();
-        self.changed = true;
     }
 
     /// Starts the timer of pool creation
@@ -1270,7 +1280,6 @@ impl RenderStats {
         }
 
         self.last_draw_pool_creation_time = self.pool_creation_instant.elapsed().as_micros();
-        self.changed = true;
     }
 
     /// Gives back the current stats as a [`String`]
@@ -1291,6 +1300,36 @@ impl RenderStats {
 pub enum AnchorType {
     Locked,
     Unlocked,
+}
+
+pub struct DrawInstanceData {
+    transform: glm::Mat4,
+    color: glm::Vec3,
+}
+
+impl DrawInstanceData {
+    /// Creates a new empty [`DrawInstanceData`]
+    pub fn new_empty() -> Self {
+        Self {
+            transform: glm::Mat4::zeros(),
+            color: glm::Vec3::zeros(),
+        }
+    }
+
+    /// Gives back the [`DrawInstanceData`] as a slice
+    ///
+    /// # Safety
+    ///
+    /// This is safe to call, since the safety conditions
+    /// of the`std::slice::from_raw_parts` function are met.
+    pub fn as_slice(&self) -> &[f32] {
+        unsafe {
+            std::slice::from_raw_parts(
+                self.transform.as_ptr(),
+                self.transform.len() + self.color.len(),
+            )
+        }
+    }
 }
 
 //==================================================
@@ -1324,7 +1363,7 @@ impl Scene {
         self.camera_zoom = f32::clamp(self.camera_zoom + delta, 0.1, 2.0);
     }
 
-    /// Pan the came on the X and Y axis
+    /// Pan the camera on the X and Y axis
     pub fn pan_view_xy(&mut self, x: f32, y: f32) -> () {
         self.camera_pos = glm::vec3(
             self.camera_pos.x + x,

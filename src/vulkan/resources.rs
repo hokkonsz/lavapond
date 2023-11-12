@@ -26,7 +26,8 @@ pub struct ObjectPool {
 pub struct ObjectInstance {
     pub position: glm::Vec3,
     pub rotation: f32,
-    pub scale: f32,
+    pub scale: glm::Vec3,
+    pub color: glm::Vec3,
     pub object_index: usize,
 }
 

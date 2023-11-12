@@ -296,10 +296,10 @@ impl StorageBuffer {
         })
     }
 
-    /// Update the data stored in [`StorageBuffer`]
+    /// Load new data into an existing [`StorageBuffer`]
     ///
     /// Similar to creation, but without storage buffer creation
-    pub fn update<T: Copy>(
+    pub fn load<T: Copy>(
         &self,
         logical_device: &ash::Device,
         device_mem_properties: &vk::PhysicalDeviceMemoryProperties,
