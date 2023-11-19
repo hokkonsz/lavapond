@@ -36,6 +36,7 @@ use resources::*;
 
 pub struct Renderer {
     // Vulkan: Base
+    #[allow(dead_code)]
     entry: ash::Entry,
     instance: ash::Instance,
     device: ash::Device,
@@ -63,6 +64,7 @@ pub struct Renderer {
     present_queue: vk::Queue,
     viewport: vk::Viewport,
     scissor: vk::Rect2D,
+    #[allow(dead_code)]
     push_constant_range: vk::PushConstantRange,
 
     // Vulkan: Buffers
@@ -300,11 +302,6 @@ impl Renderer {
             }?);
         }
 
-        // Render Loop Data
-        let scene = Scene::new(&window, ProjectionType::Orthographic);
-        let draw_pool = Vec::new(); // <- Empty Draw Pool
-        let render_stats = RenderStats::new();
-
         Ok(Self {
             // Base
             entry,
@@ -356,10 +353,10 @@ impl Renderer {
 
             // Render Loop Data
             current_frame: 0,
-            scene,
+            scene: Scene::new(&window, ProjectionType::Orthographic),
             object_pool,
-            draw_pool,
-            render_stats,
+            draw_pool: Vec::new(),
+            render_stats: RenderStats::new(),
         })
     }
 
@@ -605,7 +602,7 @@ impl Renderer {
                 std::slice::from_ref(&self.scissor),
             );
 
-            let set = self
+            let descriptor_set = self
                 .descriptor_sets
                 .get(self.current_frame)
                 .context("Descriptor Sets: Index out of bounds")?;
@@ -615,7 +612,7 @@ impl Renderer {
                 vk::PipelineBindPoint::GRAPHICS,
                 self.pipeline_layout,
                 0,
-                std::slice::from_ref(set),
+                std::slice::from_ref(descriptor_set),
                 &[],
             );
 

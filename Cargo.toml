@@ -30,7 +30,8 @@ debug_printf = []
 gpu_assist = []
 sync_validation = []
 
-
+[[example]]
+name = "physics_app"
 
 [build-dependencies]
 glsl-to-spirv = "0.1"

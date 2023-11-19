@@ -299,6 +299,7 @@ impl StorageBuffer {
     /// Load new data into an existing [`StorageBuffer`]
     ///
     /// Similar to creation, but without storage buffer creation
+    #[allow(dead_code)]
     pub fn load<T: Copy>(
         &self,
         logical_device: &ash::Device,

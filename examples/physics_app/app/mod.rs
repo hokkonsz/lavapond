@@ -1,8 +1,9 @@
 #![allow(unused)]
 
+// std
 use std::time::Instant;
 
-// Extern
+// extern
 extern crate nalgebra_glm as glm;
 use anyhow::Result;
 use rand::{self, Rng, RngCore};
@@ -16,9 +17,9 @@ use winit::{
 const WINDOW_HEIGHT: u32 = 600;
 const WINDOW_WIDTH: u32 = 800;
 
-// Intern
+// intern
 use crate::physics::{ModelType, PhysicsSystem};
-use crate::vulkan::{self, AnchorType, Renderer};
+use lavapond::{self, AnchorType, Renderer};
 
 /// Runs application
 pub fn run() -> Result<()> {
