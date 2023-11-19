@@ -34,3 +34,24 @@ are other useful resources, like [Writing an efficient Vulkan renderer](https://
 For anyone who is interested in vector graphics there is [Vector graphics on GPU](https://gasiulis.name/vector-graphics-on-gpu/) by Aurimas Gasiulis.
 I also found interesenting of the [Drawing Antialiased Lines with OpenGL](https://blog.mapbox.com/drawing-antialiased-lines-with-opengl-8766f34192dc) by Konstantin Käfer.
 Maybe reading these will put an idea in your head about where to go next.
+
+### ABOUT THE PROJECT
+
+**Example 1: Physics System**
+
+![app_run](https://github.com/hokkonsz/lavapond/assets/54407548/2cfed53d-89e8-40d0-9850-2bc8efdaeba7)
+
+Calling the app::run() methode will initiate a winit loop, where we handle different types of events.
+When the main events are cleared we update the physics system, create a draw pool and submit a draw request
+to the renderer. (_**Note to Self:** Fix the syntax on the pic above!_)
+
+![draw_request](https://github.com/hokkonsz/lavapond/assets/54407548/a879f9f2-990f-48d9-9eec-fbaffbdfa5c7)
+
+1. Fence + Semaphores
+2. Clear & Begin Command Buffer ( After All Commands Recorded End )
+3. Begin Render Pass ( After All Drawing Commands Recorded End Pass )
+4. Bind Pipeline & Buffers + Set Scissor & Viewport + Draw Objects From Drawpool
+5. Submit Command Buffer To Queue + Present Queue
+
+(_**Note to Self:**  Fix the syntax on the pic above + Write proper descriptions on the steps of draw request!_)
+
