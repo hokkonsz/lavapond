@@ -42,13 +42,13 @@ This is still only a WIP and wannabe physics system, where I am trying to simula
 
 ```cargo run --example physics_app```
 
-![app_run](https://github.com/hokkonsz/lavapond/tree/master/res/img/app_run.png)
+![app_run](https://github.com/hokkonsz/lavapond/blob/main/res/img/app_run.png)
 
 Calling app::run() will create a window and an event loop via the [winit](https://github.com/rust-windowing/winit) crate, where the latter handles the user inputs and issues the draw calls.
 When the main events are cleared we update the physics system, create a draw pool and submit a draw request
 to the renderer.
 
-![draw_request](https://github.com/hokkonsz/lavapond/tree/master/res/img/draw_request.png)
+![draw_request](https://github.com/hokkonsz/lavapond/blob/main/res/img/draw_request.png)
 
 1. [Syncronization](https://www.khronos.org/blog/understanding-vulkan-synchronization)
 2. [Clear & Begin Command Buffer ( After All Commands Recorded End )](https://vkguide.dev/docs/chapter-1/vulkan_command_flow/)
