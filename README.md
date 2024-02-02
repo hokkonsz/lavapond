@@ -37,23 +37,21 @@ Maybe reading these will put an idea in your head about where to go next.
 
 ### ABOUT THE PROJECT
 
-**1. Example** [**Physics System**](https://github.com/hokkonsz/lavapond/tree/main/examples/physics_app)
-
+Here is a short introduction to the project through the [**Physics System**](https://github.com/hokkonsz/lavapond/tree/main/examples/physics_app) example.
 This is still only a WIP and wannabe physics system, where I am trying to simulate the collision of different objects.
 
-![app_run](https://github.com/hokkonsz/lavapond/assets/54407548/2cfed53d-89e8-40d0-9850-2bc8efdaeba7)
+```cargo run --example physics_app```
 
-Calling the app::run() methode will create a window and an event loop through the [winit](https://github.com/rust-windowing/winit) crate, where the latter handles the user inputs and issues the draw calls.
+![app_run](https://github.com/hokkonsz/lavapond/tree/master/res/img/app_run.png)
+
+Calling app::run() will create a window and an event loop via the [winit](https://github.com/rust-windowing/winit) crate, where the latter handles the user inputs and issues the draw calls.
 When the main events are cleared we update the physics system, create a draw pool and submit a draw request
-to the renderer. (_**Note to Self:** Fix the syntax on the pic above!_)
+to the renderer.
 
-![draw_request](https://github.com/hokkonsz/lavapond/assets/54407548/a879f9f2-990f-48d9-9eec-fbaffbdfa5c7)
+![draw_request](https://github.com/hokkonsz/lavapond/tree/master/res/img/draw_request.png)
 
-1. Fence + Semaphores
-2. Clear & Begin Command Buffer ( After All Commands Recorded End )
-3. Begin Render Pass ( After All Drawing Commands Recorded End Pass )
-4. Bind Pipeline & Buffers + Set Scissor & Viewport + Draw Objects From Drawpool
-5. Submit Command Buffer To Queue + Present Queue
-
-(_**Note to Self:**  Fix the syntax on the pic above + Write proper descriptions on the steps of draw request!_)
-
+1. [Syncronization](https://www.khronos.org/blog/understanding-vulkan-synchronization)
+2. [Clear & Begin Command Buffer ( After All Commands Recorded End )](https://vkguide.dev/docs/chapter-1/vulkan_command_flow/)
+3. [Begin Render Pass ( After All Drawing Commands Recorded End Pass )](https://developer.samsung.com/galaxy-gamedev/resources/articles/renderpasses.html)
+4. Record Commands: Binding Data (eg. Pipeline, Vertex Buffer, ...), Set Scissor & Viewport, Drawing
+5. [Submit Command Buffer To Queue + Present Queue](https://docs.vulkan.org/guide/latest/queues.html)
