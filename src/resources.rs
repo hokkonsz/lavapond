@@ -4,8 +4,8 @@
 use std::io::BufRead;
 
 // extern
-extern crate nalgebra_glm as glm;
 use anyhow::{Ok, Result};
+use glam;
 
 //==================================================
 //=== Object
@@ -24,10 +24,10 @@ pub struct ObjectPool {
 
 #[derive(Clone, Default)]
 pub struct ObjectInstance {
-    pub position: glm::Vec3,
+    pub position: glam::Vec3,
     pub rotation: f32,
-    pub scale: glm::Vec3,
-    pub color: glm::Vec3,
+    pub scale: glam::Vec3,
+    pub color: glam::Vec3,
     pub object_index: usize,
 }
 

@@ -1,0 +1,12 @@
+[package]
+name = "utils"
+version = "0.1.0"
+description = "Utility and tools library"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+winit.workspace = true
+glam.workspace = true

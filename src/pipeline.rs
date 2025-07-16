@@ -30,73 +30,69 @@ impl GraphicsPipeline {
         let shader_mod_vert = {
             let code = std::fs::read("res/shaders/spirv/shader.vert.spv")?;
 
-            let create_info = vk::ShaderModuleCreateInfo::builder()
+            let create_info = vk::ShaderModuleCreateInfo::default()
                 .code(bytemuck::try_cast_slice(code.as_slice())?);
 
             unsafe { logical_device.create_shader_module(&create_info, None) }?
         };
 
-        let vert_shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+        let vert_shader_stage = vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::VERTEX)
             .module(shader_mod_vert)
-            .name(unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") })
-            .build();
+            .name(unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") });
 
         let shader_mod_frag = {
             let code = std::fs::read("res/shaders/spirv/shader.frag.spv")?;
 
-            let create_info = vk::ShaderModuleCreateInfo::builder()
+            let create_info = vk::ShaderModuleCreateInfo::default()
                 .code(bytemuck::try_cast_slice(code.as_slice())?);
 
             unsafe { logical_device.create_shader_module(&create_info, None) }?
         };
 
-        let frag_shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+        let frag_shader_stage = vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::FRAGMENT)
             .module(shader_mod_frag)
-            .name(CStr::from_bytes_with_nul(b"main\0")?)
-            .build();
+            .name(CStr::from_bytes_with_nul(b"main\0")?);
 
         let shader_stages = [vert_shader_stage, frag_shader_stage];
 
         /* Pipeline States */
 
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo::default()
             .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
 
-        let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
+        let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::default()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .primitive_restart_enable(false);
 
-        let vertex_binding_descriptions = vk::VertexInputBindingDescription::builder()
+        let vertex_binding_descriptions = vk::VertexInputBindingDescription::default()
             .binding(0)
             .stride(vertex_stride)
             .input_rate(vk::VertexInputRate::VERTEX);
 
         let vertex_attribute_descriptions = [
-            vk::VertexInputAttributeDescription::builder()
+            vk::VertexInputAttributeDescription::default()
                 .binding(0)
                 .location(0)
                 .format(vk::Format::R32G32B32_SFLOAT)
-                .offset(0)
-                .build(),
-            vk::VertexInputAttributeDescription::builder()
+                .offset(0),
+            vk::VertexInputAttributeDescription::default()
                 .binding(0)
                 .location(1)
                 .format(vk::Format::R32G32B32_SFLOAT)
-                .offset((std::mem::size_of::<[f32; 3]>()) as u32)
-                .build(),
+                .offset((std::mem::size_of::<[f32; 3]>()) as u32),
         ];
 
-        let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
+        let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::default()
             .vertex_binding_descriptions(std::slice::from_ref(&vertex_binding_descriptions))
             .vertex_attribute_descriptions(&vertex_attribute_descriptions);
 
-        let viewport_state = vk::PipelineViewportStateCreateInfo::builder()
+        let viewport_state = vk::PipelineViewportStateCreateInfo::default()
             .viewports(std::slice::from_ref(&viewport))
             .scissors(std::slice::from_ref(&scissor));
 
-        let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
+        let rasterization_state = vk::PipelineRasterizationStateCreateInfo::default()
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
             .polygon_mode(vk::PolygonMode::FILL)
@@ -108,12 +104,12 @@ impl GraphicsPipeline {
             .depth_bias_clamp(0.0)
             .depth_bias_slope_factor(0.0);
 
-        let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
+        let multisample_state = vk::PipelineMultisampleStateCreateInfo::default()
             .sample_shading_enable(false)
             .rasterization_samples(vk::SampleCountFlags::TYPE_1)
             .min_sample_shading(1.0);
 
-        let color_blend_attachment_state = vk::PipelineColorBlendAttachmentState::builder()
+        let color_blend_attachment_state = vk::PipelineColorBlendAttachmentState::default()
             .color_write_mask(vk::ColorComponentFlags::RGBA)
             .blend_enable(false)
             .src_color_blend_factor(vk::BlendFactor::ONE)
@@ -123,14 +119,14 @@ impl GraphicsPipeline {
             .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
             .alpha_blend_op(vk::BlendOp::ADD);
 
-        let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
+        let color_blend_state = vk::PipelineColorBlendStateCreateInfo::default()
             .logic_op_enable(false)
             .logic_op(vk::LogicOp::COPY)
             .attachments(std::slice::from_ref(&color_blend_attachment_state));
 
         /* Render- & Subpasses */
 
-        let color_attachment = vk::AttachmentDescription::builder()
+        let color_attachment = vk::AttachmentDescription::default()
             .format(vk::Format::B8G8R8A8_SRGB)
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::CLEAR)
@@ -140,15 +136,15 @@ impl GraphicsPipeline {
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
 
-        let color_attachment_ref = vk::AttachmentReference::builder()
+        let color_attachment_ref = vk::AttachmentReference::default()
             .attachment(0) // <- Index of attachment descriptor
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
 
-        let subpass = vk::SubpassDescription::builder()
+        let subpass = vk::SubpassDescription::default()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .color_attachments(std::slice::from_ref(&color_attachment_ref));
 
-        let subpass_dependency = vk::SubpassDependency::builder()
+        let subpass_dependency = vk::SubpassDependency::default()
             .src_subpass(vk::SUBPASS_EXTERNAL)
             .dst_subpass(0)
             .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
@@ -157,7 +153,7 @@ impl GraphicsPipeline {
             .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE);
 
         let render_pass = {
-            let create_info = vk::RenderPassCreateInfo::builder()
+            let create_info = vk::RenderPassCreateInfo::default()
                 .attachments(std::slice::from_ref(&color_attachment))
                 .subpasses(std::slice::from_ref(&subpass))
                 .dependencies(std::slice::from_ref(&subpass_dependency));
@@ -168,7 +164,7 @@ impl GraphicsPipeline {
         /* Pipeline Finalization */
 
         let layout = {
-            let create_info = vk::PipelineLayoutCreateInfo::builder()
+            let create_info = vk::PipelineLayoutCreateInfo::default()
                 .set_layouts(std::slice::from_ref(&descriptor_set_layout))
                 .push_constant_ranges(std::slice::from_ref(&push_constant_ranges));
 
@@ -176,7 +172,7 @@ impl GraphicsPipeline {
         };
 
         let pipeline = {
-            let create_info = vk::GraphicsPipelineCreateInfo::builder()
+            let create_info = vk::GraphicsPipelineCreateInfo::default()
                 .stages(&shader_stages)
                 .input_assembly_state(&input_assembly_state)
                 .vertex_input_state(&vertex_input_state)

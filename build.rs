@@ -1,9 +1,19 @@
 extern crate glsl_to_spirv;
 
 use glsl_to_spirv::ShaderType;
+// use std::env;
 use std::error::Error;
+use std::path::Path;
+use std::{fs, io};
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // Check debug or release build
+    // if Ok("release".to_owned()) == env::var("PROFILE") {
+    //     copy_dir_all("res/", "build/release/")?;
+    // } else {
+    //     copy_dir_all("res/", "build/debug/")?;
+    // }
+
     // Change detection of source shaders
     println!("cargo:rerun-if-changed=res/shaders/glsl");
 
@@ -43,5 +53,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    Ok(())
+}
+
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
     Ok(())
 }

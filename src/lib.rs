@@ -7,24 +7,25 @@ use std::{
 };
 
 // extern
-extern crate nalgebra_glm as glm;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Ok, Result, anyhow};
 use ash::{
-    extensions::{ext, khr},
-    util,
+    ext, khr, util,
     vk::{self, DescriptorSet},
 };
-use raw_window_handle::HasRawDisplayHandle;
+use glam;
+use raw_window_handle::HasDisplayHandle;
 use winit::dpi::PhysicalSize;
 
 // intern
 mod buffers;
+pub mod camera;
 mod descriptor;
 mod extensions;
 mod pipeline;
 mod resources;
 
 use buffers::*;
+use camera::*;
 use descriptor::*;
 use extensions::*;
 use pipeline::*;
@@ -44,11 +45,11 @@ pub struct Renderer {
     image_views: Vec<vk::ImageView>,
 
     // Vulkan: Extensions
-    debug_utils_loader: Option<ext::DebugUtils>,
+    debug_utils_loader: Option<ext::debug_utils::Instance>,
     debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
-    surface_loader: khr::Surface,
+    surface_loader: khr::surface::Instance,
     surface: vk::SurfaceKHR,
-    swapchain_loader: khr::Swapchain,
+    swapchain_loader: khr::swapchain::Device,
     swapchain: vk::SwapchainKHR,
 
     // Vulkan: Descriptor
@@ -87,7 +88,7 @@ pub struct Renderer {
 
     // Render Loop Data
     current_frame: usize,
-    pub scene: Scene,
+    pub camera: camera::Camera,
     object_pool: ObjectPool,
     pub draw_pool: Vec<ObjectInstance>,
     render_stats: RenderStats,
@@ -145,7 +146,6 @@ impl Renderer {
 
         // Extension: Swapchain
         let mut swapchain_ext = SwapchainExtension::new(
-            &entry,
             &instance,
             &device.logical_device,
             &device.physical_device,
@@ -161,15 +161,14 @@ impl Renderer {
 
         // Image views
         let mut image_views: Vec<vk::ImageView> = {
-            let subresource_range = vk::ImageSubresourceRange::builder()
+            let subresource_range = vk::ImageSubresourceRange::default()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
                 .level_count(1)
-                .layer_count(1)
-                .build();
+                .layer_count(1);
 
             let mut image_views = Vec::new();
             for img in swapchain_images {
-                let create_info = vk::ImageViewCreateInfo::builder()
+                let create_info = vk::ImageViewCreateInfo::default()
                     .image(img)
                     .view_type(vk::ImageViewType::TYPE_2D)
                     .format(vk::Format::B8G8R8A8_SRGB)
@@ -185,11 +184,10 @@ impl Renderer {
         let descriptor = Descriptor::new(&device.logical_device, Self::MAX_FRAMES_INFLIGHT)?;
 
         // Push Constants
-        let push_constant_range = vk::PushConstantRange::builder()
+        let push_constant_range = vk::PushConstantRange::default()
             .stage_flags(vk::ShaderStageFlags::VERTEX)
             .size(std::mem::size_of::<DrawInstanceData>() as u32)
-            .offset(0)
-            .build();
+            .offset(0);
 
         // Viewport & Scissor
         let mut viewport = vk::Viewport {
@@ -262,14 +260,14 @@ impl Renderer {
             &device.logical_device,
             &device.memory_properties,
             Self::MAX_FRAMES_INFLIGHT,
-            (std::mem::size_of::<CameraVP>()) as u64,
+            (std::mem::size_of::<ViewProjection>()) as u64,
         )?;
 
         descriptor.update_descriptor_sets(
             &device.logical_device,
             Self::MAX_FRAMES_INFLIGHT,
             &uniform_buffer.buffers,
-            std::mem::size_of::<CameraVP>() as u64,
+            std::mem::size_of::<ViewProjection>() as u64,
         )?;
 
         // Syncronization
@@ -296,11 +294,19 @@ impl Renderer {
 
             fences_inflight.push(unsafe {
                 device.logical_device.create_fence(
-                    &vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED),
+                    &vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED),
                     None,
                 )
             }?);
         }
+
+        // Camera
+
+        let camera = Camera::new(
+            &window,
+            glam::vec3(0.0, 0.0, 2.0),
+            ProjectionType::Orthographic,
+        );
 
         Ok(Self {
             // Base
@@ -353,7 +359,7 @@ impl Renderer {
 
             // Render Loop Data
             current_frame: 0,
-            scene: Scene::new(&window, ProjectionType::Orthographic),
+            camera,
             object_pool,
             draw_pool: Vec::new(),
             render_stats: RenderStats::new(),
@@ -373,7 +379,7 @@ impl Renderer {
 
         // Cleanup Old Swapchain
         unsafe {
-            self.device.device_wait_idle();
+            self.device.device_wait_idle()?;
             self.swapchain_loader
                 .destroy_swapchain(self.swapchain, None);
 
@@ -414,7 +420,7 @@ impl Renderer {
 
             // TODO! -> This is too strict/error prone right now, better to supplement with queried data
             // TODO! -> Check for defaults
-            let create_info = vk::SwapchainCreateInfoKHR::builder()
+            let create_info = vk::SwapchainCreateInfoKHR::default()
                 .surface(self.surface)
                 .min_image_count(min_image_count)
                 .image_format(vk::Format::B8G8R8A8_SRGB)
@@ -446,15 +452,14 @@ impl Renderer {
             unsafe { self.swapchain_loader.get_swapchain_images(self.swapchain) }?;
 
         self.image_views = {
-            let subresource_range = vk::ImageSubresourceRange::builder()
+            let subresource_range = vk::ImageSubresourceRange::default()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
                 .level_count(1)
-                .layer_count(1)
-                .build();
+                .layer_count(1);
 
             let mut image_views = Vec::new();
             for img in swapchain_images {
-                let create_info = vk::ImageViewCreateInfo::builder()
+                let create_info = vk::ImageViewCreateInfo::default()
                     .image(img)
                     .view_type(vk::ImageViewType::TYPE_2D)
                     .format(vk::Format::B8G8R8A8_SRGB)
@@ -495,9 +500,8 @@ impl Renderer {
             4.5,
             1.75,
             0.0,
-            -1.7,
-            0.85,
-            glm::vec3(0.5, 0.5, 0.5),
+            WorldPos2D::new(-1.7, 0.85),
+            glam::vec3(0.5, 0.5, 0.5),
             AnchorType::Locked,
         )?;
         self.text(
@@ -521,7 +525,7 @@ impl Renderer {
                 ),
                 true,
                 u64::MAX,
-            );
+            )?;
 
             self.device.reset_fences(std::slice::from_ref(
                 &self.fences_inflight[self.current_frame],
@@ -553,7 +557,7 @@ impl Renderer {
                 &vk::CommandBufferBeginInfo::default(),
             )?;
 
-            let render_pass_begin = vk::RenderPassBeginInfo::builder()
+            let render_pass_begin = vk::RenderPassBeginInfo::default()
                 .render_pass(self.render_pass)
                 .framebuffer(
                     *self
@@ -630,7 +634,7 @@ impl Renderer {
             self.device
                 .end_command_buffer(self.draw_command_buffers[self.current_frame])?;
 
-            self.scene.update_projection(&window);
+            self.camera.update_projection(window);
 
             let mut uniform_align = util::Align::new(
                 *self
@@ -644,9 +648,9 @@ impl Renderer {
                     .size,
             );
 
-            uniform_align.copy_from_slice(&std::slice::from_ref(&self.scene.camera_vp));
+            uniform_align.copy_from_slice(&std::slice::from_ref(self.camera.get_view_projection()));
 
-            let submit_info = vk::SubmitInfo::builder()
+            let submit_info = vk::SubmitInfo::default()
                 .wait_dst_stage_mask(std::slice::from_ref(
                     &vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                 ))
@@ -668,7 +672,7 @@ impl Renderer {
                 self.fences_inflight[self.current_frame],
             )?;
 
-            let present_info = vk::PresentInfoKHR::builder()
+            let present_info = vk::PresentInfoKHR::default()
                 .wait_semaphores(std::slice::from_ref(
                     &self.semaphores_release[self.current_frame],
                 ))
@@ -704,16 +708,10 @@ impl Renderer {
         let mut draw_instance_data = DrawInstanceData::new_empty();
 
         for draw_instance in &self.draw_pool {
-            draw_instance_data.transform = glm::translate(
-                &glm::Mat4::identity(),
-                &draw_instance.position, // Object Position
-            ) * glm::rotate(
-                &glm::Mat4::identity(),
-                (draw_instance.rotation).to_radians(), // Rotation
-                &glm::vec3(0.0, 0.0, 1.0),             // Axis of Rotation
-            ) * glm::scale(
-                &glm::Mat4::identity(),
-                &draw_instance.scale, // Scale Factors
+            draw_instance_data.transform = glam::Mat4::from_scale_rotation_translation(
+                draw_instance.scale,
+                glam::Quat::from_rotation_z(draw_instance.rotation.to_radians()),
+                draw_instance.position,
             );
 
             draw_instance_data.color = draw_instance.color;
@@ -724,7 +722,7 @@ impl Renderer {
                     self.pipeline_layout,
                     vk::ShaderStageFlags::VERTEX,
                     0,
-                    &bytemuck::try_cast_slice(&draw_instance_data.as_slice())?,
+                    &bytemuck::try_cast_slice(draw_instance_data.as_slice())?,
                 );
 
                 self.device.cmd_draw_indexed(
@@ -737,6 +735,15 @@ impl Renderer {
                 );
             }
         }
+
+        Ok(())
+    }
+
+    /// https://registry.khronos.org/vulkan/specs/latest/man/html/vkDeviceWaitIdle.html
+    ///
+    /// Should be called before dropping renderer
+    pub fn wait_device_idle(&self) -> Result<()> {
+        unsafe { self.device.device_wait_idle()? }
 
         Ok(())
     }
@@ -757,12 +764,12 @@ impl Renderer {
         let pad_y = scale * 0.05;
 
         let anchor_position = match anchor_type {
-            AnchorType::Locked => glm::vec3(
-                top_left_x + self.scene.camera_pos.x + pad_x,
-                top_left_y + self.scene.camera_pos.y - pad_y,
+            AnchorType::Locked => glam::vec3(
+                top_left_x + self.camera.get_position().x + pad_x,
+                top_left_y + self.camera.get_position().y - pad_y,
                 0.0,
             ),
-            AnchorType::Unlocked => glm::vec3(top_left_x + pad_x, top_left_y - pad_y, 0.0),
+            AnchorType::Unlocked => glam::vec3(top_left_x + pad_x, top_left_y - pad_y, 0.0),
         };
 
         let mut char_index;
@@ -788,7 +795,7 @@ impl Renderer {
             if char_index != 254 {
                 text_instance_pool.push(ObjectInstance {
                     position: cursor_position,
-                    scale: glm::vec3(scale, scale, 0.0),
+                    scale: glam::vec3(scale, scale, 0.0),
                     object_index: char_index as usize,
                     ..ObjectInstance::default()
                 });
@@ -807,24 +814,23 @@ impl Renderer {
     pub fn circle(
         &mut self,
         scale: f32,
-        center_x: f32,
-        center_y: f32,
-        color: glm::Vec3,
+        center: WorldPos2D,
+        color: glam::Vec3,
         anchor_type: AnchorType,
     ) -> Result<()> {
         let anchor_position = match anchor_type {
-            AnchorType::Locked => glm::vec3(
-                center_x + self.scene.camera_pos.x,
-                center_y + self.scene.camera_pos.y,
+            AnchorType::Locked => glam::vec3(
+                center.x + self.camera.get_position().x,
+                center.y + self.camera.get_position().y,
                 0.0,
             ),
-            AnchorType::Unlocked => glm::vec3(center_x, center_y, 0.0),
+            AnchorType::Unlocked => glam::vec3(center.x, center.y, 0.0),
         };
 
         self.draw_pool.push(ObjectInstance {
             position: anchor_position,
             rotation: 0.0, // <- Matters only if has a texture
-            scale: glm::vec3(scale, scale, 0.0),
+            scale: glam::vec3(scale, scale, 0.0),
             color,
             object_index: self.object_pool.pool.len() - 1,
         });
@@ -838,24 +844,23 @@ impl Renderer {
         scale_x: f32,
         scale_y: f32,
         rotation: f32,
-        center_x: f32,
-        center_y: f32,
-        color: glm::Vec3,
+        center: WorldPos2D,
+        color: glam::Vec3,
         anchor_type: AnchorType,
     ) -> Result<()> {
         let anchor_position = match anchor_type {
-            AnchorType::Locked => glm::vec3(
-                center_x + self.scene.camera_pos.x,
-                center_y + self.scene.camera_pos.y,
+            AnchorType::Locked => glam::vec3(
+                center.x + self.camera.get_position().x,
+                center.y + self.camera.get_position().y,
                 0.0,
             ),
-            AnchorType::Unlocked => glm::vec3(center_x, center_y, 0.0),
+            AnchorType::Unlocked => glam::vec3(center.x, center.y, 0.0),
         };
 
         self.draw_pool.push(ObjectInstance {
             position: anchor_position,
             rotation: rotation,
-            scale: glm::vec3(scale_x, scale_y, 0.0),
+            scale: glam::vec3(scale_x, scale_y, 0.0),
             color,
             object_index: self.object_pool.pool.len() - 2,
         });
@@ -890,13 +895,31 @@ impl Renderer {
             self.render_stats.last_draw_pool_vertices = self.object_pool.vertices.len();
         }
     }
+
+    /* Misc */
+
+    pub fn screen_to_world(&self, position: ScreenPos2D) -> WorldPos2D {
+        let half_width = self.camera.get_width() * 0.5;
+        let half_height = self.camera.get_height() * 0.5;
+        let x = (position.x - half_width) / half_width;
+        let y = (position.y - half_height) / half_height;
+
+        WorldPos2D::new(x, y)
+    }
+
+    pub fn world_to_screen(&self, position: WorldPos2D) -> ScreenPos2D {
+        let half_width = self.camera.get_width() * 0.5;
+        let half_height = self.camera.get_height() * 0.5;
+        let x = (position.x * half_width) + half_width;
+        let y = (position.y * half_height) + half_height;
+
+        ScreenPos2D::new(x, y)
+    }
 }
 
 impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
-            self.device.device_wait_idle();
-
             // Buffers: Index & Vertex
             self.device.destroy_buffer(self.index_buffer, None);
             self.device.free_memory(self.index_buffer_memory, None);
@@ -972,12 +995,12 @@ pub fn create_instance(
     window: &winit::window::Window,
 ) -> Result<ash::Instance> {
     /* Application Data */
-    let api_version = match entry.try_enumerate_instance_version()? {
+    let api_version = match unsafe { entry.try_enumerate_instance_version()? } {
         Some(v) if vk::api_version_minor(v) >= 3 => Ok(vk::API_VERSION_1_3),
         _ => Err(anyhow!("Atleast Vulkan Version 1.3 needed")),
     }?;
 
-    let application_info = vk::ApplicationInfo::builder()
+    let application_info = vk::ApplicationInfo::default()
         .application_name(unsafe { CStr::from_bytes_with_nul_unchecked(b"lavapond\0") })
         .application_version(vk::make_api_version(0, 0, 1, 0))
         .engine_name(unsafe { CStr::from_bytes_with_nul_unchecked(b"vulkan\0") })
@@ -986,14 +1009,14 @@ pub fn create_instance(
 
     /* Extensions */
     let mut enabled_extension_names =
-        ash_window::enumerate_required_extensions(window.raw_display_handle())?.to_vec();
+        ash_window::enumerate_required_extensions(window.display_handle()?.as_raw())?.to_vec();
 
-    enabled_extension_names.push(khr::Surface::name().as_ptr());
+    enabled_extension_names.push(khr::surface::NAME.as_ptr());
 
     #[cfg(feature = "render_dbg")]
-    enabled_extension_names.push(ext::DebugUtils::name().as_ptr());
+    enabled_extension_names.push(ext::debug_utils::NAME.as_ptr());
 
-    let create_info = vk::InstanceCreateInfo::builder()
+    let create_info = vk::InstanceCreateInfo::default()
         .application_info(&application_info)
         .enabled_extension_names(&enabled_extension_names);
 
@@ -1021,7 +1044,7 @@ pub fn create_instance(
     enabled_validation_features.push(vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION);
 
     #[cfg(feature = "render_dbg")]
-    let mut validation_features = vk::ValidationFeaturesEXT::builder()
+    let mut validation_features = vk::ValidationFeaturesEXT::default()
         .enabled_validation_features(&enabled_validation_features);
 
     #[cfg(feature = "render_dbg")]
@@ -1067,7 +1090,7 @@ impl Device {
             /* Extension Properties */
             if !(unsafe { instance.enumerate_device_extension_properties(pd) }?
                 .into_iter()
-                .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == khr::Swapchain::name())) {
+                .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == khr::swapchain::NAME)) {
 					continue;
 				}
 
@@ -1173,25 +1196,22 @@ impl Device {
 
             let queue_create_infos = vec![
                 // Graphics Queue
-                vk::DeviceQueueCreateInfo::builder()
+                vk::DeviceQueueCreateInfo::default()
                     .queue_family_index(graphics_queue_index)
-                    .queue_priorities(&queue_priority)
-                    .build(),
+                    .queue_priorities(&queue_priority),
                 // Present Queue
-                vk::DeviceQueueCreateInfo::builder()
+                vk::DeviceQueueCreateInfo::default()
                     .queue_family_index(present_queue_index)
-                    .queue_priorities(&queue_priority)
-                    .build(),
+                    .queue_priorities(&queue_priority),
                 // Transfer Queue
-                // vk::DeviceQueueCreateInfo::builder()
+                // vk::DeviceQueueCreateInfo::default()
                 //     .queue_family_index(transfer_queue_index)
-                //     .queue_priorities(&queue_priority)
-                //     .build(),
+                //     .queue_priorities(&queue_priority),
             ];
 
-            let extension_names = [khr::Swapchain::name().as_ptr()];
+            let extension_names = [khr::swapchain::NAME.as_ptr()];
 
-            let create_info = vk::DeviceCreateInfo::builder()
+            let create_info = vk::DeviceCreateInfo::default()
                 .queue_create_infos(&queue_create_infos)
                 .enabled_extension_names(&extension_names);
 
@@ -1281,12 +1301,14 @@ impl RenderStats {
 
     /// Gives back the current stats as a [`String`]
     fn as_text(&self) -> String {
-        format!("[Statistics]\nfps: {}\nrequest time: {} us\npool creation time:{}\nelements:{}\nvertices:{}", 
-        self.frames_per_sec,
-        self.last_draw_request_time,
-        self.last_draw_pool_creation_time,
-        self.last_draw_pool_elements,
-        self.last_draw_pool_vertices)
+        format!(
+            "[Statistics]\nfps: {}\nrequest time: {} us\npool creation time:{}\nelements:{}\nvertices:{}",
+            self.frames_per_sec,
+            self.last_draw_request_time,
+            self.last_draw_pool_creation_time,
+            self.last_draw_pool_elements,
+            self.last_draw_pool_vertices
+        )
     }
 }
 
@@ -1300,16 +1322,19 @@ pub enum AnchorType {
 }
 
 pub struct DrawInstanceData {
-    transform: glm::Mat4,
-    color: glm::Vec3,
+    transform: glam::Mat4,
+    color: glam::Vec3,
 }
 
 impl DrawInstanceData {
+    const TRANSFORM_LEN: usize = 4 * 4;
+    const COLOR_LEN: usize = 3;
+
     /// Creates a new empty [`DrawInstanceData`]
     pub fn new_empty() -> Self {
         Self {
-            transform: glm::Mat4::zeros(),
-            color: glm::Vec3::zeros(),
+            transform: glam::Mat4::ZERO,
+            color: glam::Vec3::ZERO,
         }
     }
 
@@ -1322,135 +1347,9 @@ impl DrawInstanceData {
     pub fn as_slice(&self) -> &[f32] {
         unsafe {
             std::slice::from_raw_parts(
-                self.transform.as_ptr(),
-                self.transform.len() + self.color.len(),
+                self.transform.as_ref().as_ptr(),
+                Self::TRANSFORM_LEN + Self::COLOR_LEN,
             )
         }
     }
-}
-
-//==================================================
-//=== Render Loop
-//==================================================
-
-pub struct Scene {
-    camera_zoom: f32,
-    camera_pos: glm::Vec3,
-    camera_vp: CameraVP,
-    projection: ProjectionType,
-}
-
-impl Scene {
-    /// Creates a new [`Scene`] based on the current windows size
-    pub fn new(window: &winit::window::Window, projection_type: ProjectionType) -> Self {
-        let aspect = (window.inner_size().width / window.inner_size().height) as f32;
-        let camera_pos = glm::vec3(0.0, 0.0, 2.0);
-        let camera_vp = CameraVP::new(&camera_pos, &projection_type, aspect);
-
-        Self {
-            camera_zoom: 1.0,
-            camera_pos,
-            camera_vp,
-            projection: projection_type,
-        }
-    }
-
-    /// Change the current zoom level with the value of `delta`
-    pub fn zoom(&mut self, delta: f32) -> () {
-        self.camera_zoom = f32::clamp(self.camera_zoom + delta, 0.1, 2.0);
-    }
-
-    /// Pan the camera on the X and Y axis
-    pub fn pan_view_xy(&mut self, x: f32, y: f32) -> () {
-        self.camera_pos = glm::vec3(
-            self.camera_pos.x + x,
-            self.camera_pos.y - y,
-            self.camera_pos.z,
-        );
-
-        self.camera_vp.view = glm::look_at(
-            &self.camera_pos,                                      // Camera Position
-            &glm::vec3(self.camera_pos.x, self.camera_pos.y, 0.0), // Camera Target
-            &glm::vec3(0.0, 1.0, 0.0),
-        );
-    }
-
-    /// Updates the projection matrix of the camera
-    ///
-    /// If the camera is fix then we do not need to call this function
-    pub fn update_projection(&mut self, window: &winit::window::Window) -> () {
-        //let n = 2.0 * self.camera_zoom;
-
-        let target_width = 4.0;
-        let target_height = 3.0;
-        let target_aspect = target_width / target_height;
-        let viewport_aspect =
-            (window.inner_size().width as f32) / (window.inner_size().height as f32);
-
-        match self.projection {
-            ProjectionType::Orthographic => {
-                if target_aspect >= viewport_aspect {
-                    self.camera_vp.projection = glm::ortho(
-                        -viewport_aspect / target_aspect * target_width / 2.0, // -n * 0.5,
-                        viewport_aspect / target_aspect * target_width / 2.0,  // n * 0.5,
-                        -target_height / 2.0,                                  // -n * 0.5 / aspect,
-                        target_height / 2.0,                                   // n * 0.5 / aspect,
-                        -100.0,
-                        100.0,
-                    );
-                } else {
-                    self.camera_vp.projection = glm::ortho(
-                        -target_width / 2.0,                                    // -n * 0.5,
-                        target_width / 2.0,                                     // n * 0.5,
-                        -target_aspect / viewport_aspect * target_height / 2.0, // -n * 0.5 / aspect,
-                        target_aspect / viewport_aspect * target_height / 2.0,  // n * 0.5 / aspect,
-                        -100.0,
-                        100.0,
-                    );
-                }
-            }
-            ProjectionType::Perspective => {
-                self.camera_vp.projection =
-                    glm::perspective(viewport_aspect, (60.0f32).to_radians(), 0.1, 20.0);
-            }
-        };
-
-        self.camera_vp.projection[(1, 1)] *= -1.0;
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct CameraVP {
-    view: glm::Mat4,
-    projection: glm::Mat4,
-}
-
-impl CameraVP {
-    /// Creates a new [`CameraVP`]
-    pub fn new(position: &glm::Vec3, projection_type: &ProjectionType, aspect: f32) -> Self {
-        let mut projection = match projection_type {
-            ProjectionType::Orthographic => {
-                glm::ortho(-1.0, 1.0, -1.0 / aspect, 1.0 / aspect, -100.0, 100.0)
-            }
-
-            ProjectionType::Perspective => {
-                glm::perspective(aspect, (60.0f32).to_radians(), 0.1, 10.0)
-            }
-        };
-        projection[(1, 1)] *= -1.0;
-
-        Self {
-            view: glm::look_at(
-                position,                                // Camera Position
-                &glm::vec3(position.x, position.y, 0.0), // Camera Target
-                &glm::vec3(0.0, 1.0, 0.0),               // Up Axis
-            ),
-            projection,
-        }
-    }
-}
-
-pub enum ProjectionType {
-    Orthographic,
-    Perspective,
 }

@@ -2,7 +2,8 @@
 use std::time::Instant;
 
 // extern
-extern crate nalgebra_glm as glm;
+use glam;
+use lavapond::camera::WorldPos2D;
 
 pub struct PhysicsSystem {
     pub models: Vec<Model>,
@@ -10,71 +11,115 @@ pub struct PhysicsSystem {
     simulation_state: SimulationState,
 }
 
-impl PhysicsSystem {
-    /// Creates a new [`PhysicsSystem`]
-    pub fn new() -> Self {
+impl Default for PhysicsSystem {
+    fn default() -> Self {
         Self {
             models: vec![],
             instant: Instant::now(),
-            simulation_state: SimulationState::Paused,
+            simulation_state: SimulationState::Pause,
         }
     }
+}
 
+impl PhysicsSystem {
     /// Adds a `Circle` model to [`PhysicsSystem`]
-    pub fn circle(
+    pub fn add_circle(
         &mut self,
         radius: f32,
-        position: glm::Vec2,
-        velocity: glm::Vec2,
-        color: glm::Vec3,
+        position: WorldPos2D,
+        velocity: glam::Vec2,
+        color: glam::Vec3,
     ) -> () {
         self.models.push(Model {
             position,
             velocity,
-            acceleration: glm::vec2(0.0, 0.0),
-            model_type: ModelType::Circle(radius, color),
+            // acceleration: glam::vec2(0.0, 0.0),
+            model_type: ModelType::Circle(radius, Color(color)),
+        });
+    }
+
+    /// Adds a `Circle` model to [`PhysicsSystem`]
+    ///
+    /// Color and velocity randomised
+    pub fn add_circle2(&mut self, radius: f32, position: WorldPos2D) -> () {
+        self.models.push(Model {
+            position,
+            velocity: glam::vec2(rand::random_range(-0.5..0.5), rand::random_range(-0.5..0.5)),
+            model_type: ModelType::Circle(radius, Color::random()),
+        });
+    }
+
+    /// Adds a `Circle` model to [`PhysicsSystem`]
+    ///
+    /// Values randomised based on input ranges
+    pub fn add_circle3(
+        &mut self,
+        radius: std::ops::Range<f32>,
+        position_x: std::ops::Range<f32>,
+        position_y: std::ops::Range<f32>,
+        velocity: std::ops::Range<f32>,
+    ) -> () {
+        self.models.push(Model {
+            position: WorldPos2D::new(
+                rand::random_range(position_x),
+                rand::random_range(position_y),
+            ),
+            velocity: glam::vec2(
+                rand::random_range(velocity.clone()),
+                rand::random_range(velocity),
+            ),
+            model_type: ModelType::Circle(rand::random_range(radius), Color::random()),
         });
     }
 
     /// Adds a `Arena` model to [`PhysicsSystem`]
     pub fn arena(
         &mut self,
-        sides: glm::Vec2,
-        position: glm::Vec2,
-        velocity: glm::Vec2,
-        color: glm::Vec3,
+        sides: glam::Vec2,
+        position: WorldPos2D,
+        velocity: glam::Vec2,
+        color: glam::Vec3,
     ) -> () {
         self.models.push(Model {
             position,
             velocity,
-            acceleration: glm::vec2(0.0, 0.0),
-            model_type: ModelType::Arena(sides.x, sides.y, color),
+            // acceleration: glam::vec2(0.0, 0.0),
+            model_type: ModelType::Arena(sides.x, sides.y, Color(color)),
         });
     }
 
     /// Updates the models in the [`PhysicsSystem`] based on the elapsed time
     pub fn update(&mut self) -> () {
-        if self.simulation_state == SimulationState::Paused {
+        if self.simulation_state == SimulationState::Pause {
             self.instant = Instant::now();
             return;
         }
 
         for model in self.models.as_mut_slice() {
-            // X Axis
-            if (model.position.x - model.x_range() <= -1.0)
-                || model.position.x + model.x_range() >= 1.0
-            {
+            // Skip if its an arena
+            if matches!(model.model_type, ModelType::Arena(..)) {
+                continue;
+            }
+
+            // New position
+            model.position += model.velocity * self.instant.elapsed().as_secs_f32();
+
+            // Check area limits and invert velocity
+            if model.position.x - model.x_range() <= -1.0 {
+                model.position.x = -1.0 + model.x_range();
+                model.velocity.x *= -1.0;
+            } else if model.position.x + model.x_range() >= 1.0 {
+                model.position.x = 1.0 - model.x_range();
                 model.velocity.x *= -1.0;
             }
 
-            // Y Axis
-            if (model.position.y - model.y_range() <= -1.0)
-                || model.position.y + model.y_range() >= 1.0
-            {
+            if model.position.y - model.y_range() <= -1.0 {
+                model.position.y = -1.0 + model.y_range();
+                model.velocity.y *= -1.0;
+            } else if model.position.y + model.y_range() >= 1.0 {
+                model.position.y = 1.0 - model.y_range();
                 model.velocity.y *= -1.0;
             }
-
-            model.position += model.velocity * self.instant.elapsed().as_secs_f32();
         }
 
         self.instant = Instant::now();
@@ -83,18 +128,20 @@ impl PhysicsSystem {
     /// Switches the [`SimulationState`] to `Run`
     pub fn set_run(&mut self) -> () {
         self.simulation_state = SimulationState::Run;
+        dbg!("State Run");
     }
 
     /// Switches the [`SimulationState`] to `Paused`
     pub fn set_pause(&mut self) -> () {
-        self.simulation_state = SimulationState::Run;
+        self.simulation_state = SimulationState::Pause;
+        dbg!("State Pause");
     }
 
     /// Switches between `Paused` and `Run` [`SimulationState`]s
     pub fn switch_state(&mut self) -> () {
         match self.simulation_state {
-            SimulationState::Run => self.simulation_state = SimulationState::Paused,
-            SimulationState::Paused => self.simulation_state = SimulationState::Run,
+            SimulationState::Run => self.set_pause(),
+            SimulationState::Pause => self.set_run(),
         }
     }
 }
@@ -102,22 +149,38 @@ impl PhysicsSystem {
 #[derive(PartialEq)]
 pub enum SimulationState {
     Run,
-    Paused,
+    Pause,
 }
 
 //==================================================
 //=== Model
 //==================================================
 
-use f32 as Radius;
-use f32 as X_side;
-use f32 as Y_side;
-use glm::Vec3 as Color;
+type Radius = f32;
+type SideA = f32;
+type SideB = f32;
+
+#[derive(Clone, Copy, PartialEq)]
+pub struct Color(pub glam::Vec3);
+
+impl Color {
+    fn new(r: f32, g: f32, b: f32) -> Self {
+        Color(glam::vec3(r, g, b))
+    }
+
+    fn random() -> Self {
+        Color(glam::vec3(
+            rand::random_range(0.0..1.0),
+            rand::random_range(0.0..1.0),
+            rand::random_range(0.0..1.0),
+        ))
+    }
+}
 
 pub struct Model {
-    pub position: glm::Vec2,
-    pub velocity: glm::Vec2,
-    pub acceleration: glm::Vec2,
+    pub position: lavapond::camera::WorldPos2D,
+    pub velocity: glam::Vec2,
+    // pub acceleration: glam::Vec2,
     pub model_type: ModelType,
 }
 
@@ -139,5 +202,5 @@ impl Model {
 
 pub enum ModelType {
     Circle(Radius, Color),
-    Arena(X_side, Y_side, Color),
+    Arena(SideA, SideB, Color),
 }

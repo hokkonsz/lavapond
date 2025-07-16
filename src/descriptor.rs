@@ -16,13 +16,13 @@ impl Descriptor {
     /// Creates a new [`Descriptor`]
     pub fn new(logical_device: &ash::Device, max_frames_inflight: usize) -> Result<Self> {
         let set_layout = {
-            let layout_binding = vk::DescriptorSetLayoutBinding::builder()
+            let layout_binding = vk::DescriptorSetLayoutBinding::default()
                 .binding(0)
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .descriptor_count(1)
                 .stage_flags(vk::ShaderStageFlags::VERTEX);
 
-            let create_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            let create_info = vk::DescriptorSetLayoutCreateInfo::default()
                 .bindings(std::slice::from_ref(&layout_binding));
 
             unsafe { logical_device.create_descriptor_set_layout(&create_info, None) }?
@@ -30,9 +30,9 @@ impl Descriptor {
 
         let pool = {
             let pool_size =
-                vk::DescriptorPoolSize::builder().descriptor_count(max_frames_inflight as u32);
+                vk::DescriptorPoolSize::default().descriptor_count(max_frames_inflight as u32);
 
-            let create_info = vk::DescriptorPoolCreateInfo::builder()
+            let create_info = vk::DescriptorPoolCreateInfo::default()
                 .pool_sizes(std::slice::from_ref(&pool_size))
                 .max_sets(max_frames_inflight as u32);
 
@@ -42,7 +42,7 @@ impl Descriptor {
         let sets = {
             let set_layouts = vec![set_layout; max_frames_inflight];
 
-            let allocate_info = vk::DescriptorSetAllocateInfo::builder()
+            let allocate_info = vk::DescriptorSetAllocateInfo::default()
                 .descriptor_pool(pool)
                 .set_layouts(&set_layouts);
 
@@ -65,7 +65,7 @@ impl Descriptor {
         data_size: u64,
     ) -> Result<()> {
         for i in 0..max_frames_inflight {
-            let buffer_info = vk::DescriptorBufferInfo::builder()
+            let buffer_info = vk::DescriptorBufferInfo::default()
                 .buffer(
                     *buffers
                         .get(i)
@@ -74,7 +74,7 @@ impl Descriptor {
                 .offset(0)
                 .range(data_size);
 
-            let descriptor_write = vk::WriteDescriptorSet::builder()
+            let descriptor_write = vk::WriteDescriptorSet::default()
                 .dst_set(
                     *self
                         .sets

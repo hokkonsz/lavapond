@@ -19,7 +19,7 @@ impl CommandBuffer {
         buffer_count: u32,
     ) -> Result<Self> {
         let pool = {
-            let create_info = vk::CommandPoolCreateInfo::builder()
+            let create_info = vk::CommandPoolCreateInfo::default()
                 .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
                 .queue_family_index(queue_family_index);
 
@@ -27,7 +27,7 @@ impl CommandBuffer {
         };
 
         let buffers = {
-            let allocate_info = vk::CommandBufferAllocateInfo::builder()
+            let allocate_info = vk::CommandBufferAllocateInfo::default()
                 .command_pool(pool)
                 .level(vk::CommandBufferLevel::PRIMARY)
                 .command_buffer_count(buffer_count);
@@ -56,7 +56,7 @@ impl CommandBuffer {
         }
 
         let pool = {
-            let create_info = vk::CommandPoolCreateInfo::builder()
+            let create_info = vk::CommandPoolCreateInfo::default()
                 .flags(vk::CommandPoolCreateFlags::TRANSIENT)
                 .queue_family_index(*queue_family_index);
 
@@ -64,7 +64,7 @@ impl CommandBuffer {
         };
 
         let buffers = {
-            let allocate_info = vk::CommandBufferAllocateInfo::builder()
+            let allocate_info = vk::CommandBufferAllocateInfo::default()
                 .command_pool(pool)
                 .level(vk::CommandBufferLevel::PRIMARY)
                 .command_buffer_count(1);
@@ -76,7 +76,7 @@ impl CommandBuffer {
             /* Start Recording */
             logical_device.begin_command_buffer(
                 buffers[0],
-                &vk::CommandBufferBeginInfo::builder()
+                &vk::CommandBufferBeginInfo::default()
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
 
@@ -86,7 +86,7 @@ impl CommandBuffer {
                     buffers[0],
                     *src_buffers[i],
                     *dst_buffers[i],
-                    &[vk::BufferCopy::builder().size(data_sizes[i]).build()],
+                    &[vk::BufferCopy::default().size(data_sizes[i])],
                 );
             }
 
@@ -94,7 +94,7 @@ impl CommandBuffer {
             logical_device.end_command_buffer(buffers[0])?;
 
             /* Submit To Queue */
-            let submit_info = vk::SubmitInfo::builder().command_buffers(&buffers);
+            let submit_info = vk::SubmitInfo::default().command_buffers(&buffers);
 
             logical_device.queue_submit(
                 *queue,
@@ -103,7 +103,7 @@ impl CommandBuffer {
             )?;
 
             /* Cleanup*/
-            logical_device.queue_wait_idle(*queue);
+            logical_device.queue_wait_idle(*queue)?;
             logical_device.destroy_command_pool(pool, None);
         }
 
@@ -133,7 +133,7 @@ impl FrameBuffer {
         for iv in image_views {
             let iv = [*iv];
 
-            let create_info = vk::FramebufferCreateInfo::builder()
+            let create_info = vk::FramebufferCreateInfo::default()
                 .render_pass(*render_pass)
                 .attachments(&iv)
                 .width(width)
@@ -181,7 +181,7 @@ impl StorageBuffer {
         /* Staging Buffer */
 
         let staging_buffer = {
-            let create_info = vk::BufferCreateInfo::builder()
+            let create_info = vk::BufferCreateInfo::default()
                 .size(data_size)
                 .usage(vk::BufferUsageFlags::TRANSFER_SRC)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
@@ -208,7 +208,7 @@ impl StorageBuffer {
                 memory_type_index += 1;
             }
 
-            let allocate_info = vk::MemoryAllocateInfo::builder()
+            let allocate_info = vk::MemoryAllocateInfo::default()
                 .allocation_size(staging_buffer_mem_requirements.size)
                 .memory_type_index(memory_type_index);
 
@@ -241,7 +241,7 @@ impl StorageBuffer {
         };
 
         let buffer = {
-            let create_info = vk::BufferCreateInfo::builder()
+            let create_info = vk::BufferCreateInfo::default()
                 .size(data_size)
                 .usage(vk::BufferUsageFlags::TRANSFER_DST | usage_flag)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
@@ -266,7 +266,7 @@ impl StorageBuffer {
                 memory_type_index += 1;
             }
 
-            let allocate_info = vk::MemoryAllocateInfo::builder()
+            let allocate_info = vk::MemoryAllocateInfo::default()
                 .allocation_size(buffer_mem_requirements.size)
                 .memory_type_index(memory_type_index);
 
@@ -313,7 +313,7 @@ impl StorageBuffer {
         /* Staging Buffer */
 
         let staging_buffer = {
-            let create_info = vk::BufferCreateInfo::builder()
+            let create_info = vk::BufferCreateInfo::default()
                 .size(data_size)
                 .usage(vk::BufferUsageFlags::TRANSFER_SRC)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
@@ -340,7 +340,7 @@ impl StorageBuffer {
                 memory_type_index += 1;
             }
 
-            let allocate_info = vk::MemoryAllocateInfo::builder()
+            let allocate_info = vk::MemoryAllocateInfo::default()
                 .allocation_size(staging_buffer_mem_requirements.size)
                 .memory_type_index(memory_type_index);
 
@@ -409,7 +409,7 @@ impl UniformBuffer {
 
         for _ in 0..buffer_count {
             let uniform_buffer = {
-                let create_info = vk::BufferCreateInfo::builder()
+                let create_info = vk::BufferCreateInfo::default()
                     .size(buffer_size)
                     .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
                     .sharing_mode(vk::SharingMode::EXCLUSIVE);
@@ -435,7 +435,7 @@ impl UniformBuffer {
                     memory_type_index += 1;
                 }
 
-                let allocate_info = vk::MemoryAllocateInfo::builder()
+                let allocate_info = vk::MemoryAllocateInfo::default()
                     .allocation_size(uniform_mem_requirements.size)
                     .memory_type_index(memory_type_index);
 

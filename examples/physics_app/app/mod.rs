@@ -1,125 +1,124 @@
-#![allow(unused)]
-
-// std
-use std::time::Instant;
-
 // extern
-extern crate nalgebra_glm as glm;
 use anyhow::Result;
-use rand::{self, Rng, RngCore};
+use glam;
+use raw_window_handle::HasWindowHandle;
 use winit::{
-    dpi::{PhysicalPosition, PhysicalSize},
-    event::{DeviceEvent, ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
-    window::{CursorIcon, WindowBuilder},
+    application::ApplicationHandler,
+    dpi::PhysicalSize,
+    event::{StartCause, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::Window,
 };
 
-const WINDOW_HEIGHT: u32 = 600;
-const WINDOW_WIDTH: u32 = 800;
+const WINDOW_SIZE: PhysicalSize<u32> = PhysicalSize {
+    width: 800,
+    height: 600,
+};
 
 // intern
 use crate::physics::{ModelType, PhysicsSystem};
-use lavapond::{self, AnchorType, Renderer};
+use lavapond::{
+    self, AnchorType, Renderer,
+    camera::{ScreenPos2D, WorldPos2D},
+};
+use utils::input::{InputHandler, Inputs};
 
-/// Runs application
-pub fn run() -> Result<()> {
-    // Window
-    let event_loop = EventLoop::new();
+#[derive(Default)]
+struct App {
+    window: Option<Window>,
+    renderer: Option<Renderer>,
+    physics_system: PhysicsSystem,
+    inputs: Inputs,
+}
 
-    let mut window_size = PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT);
-    let window = WindowBuilder::new()
-        .with_title("lavapond")
-        .with_inner_size(window_size)
-        .build(&event_loop)?;
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.window = Some(
+            event_loop
+                .create_window(
+                    Window::default_attributes()
+                        .with_inner_size(WINDOW_SIZE)
+                        .with_title("lavapond"),
+                )
+                .unwrap(),
+        );
+    }
 
-    // Input Handling
-    let mut lmb_down = false;
-    let mut last_mouse_pos: Option<PhysicalPosition<f64>> = None;
-    let mut mouse_pos: PhysicalPosition<f64> = PhysicalPosition::new(0.0, 0.0);
-    let mut center_pos: PhysicalPosition<f64> = PhysicalPosition::new(0.0, 0.0);
+    fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
+        match cause {
+            StartCause::Init => {
+                self.physics_system.arena(
+                    glam::vec2(5.0, 5.0),
+                    WorldPos2D::from_screen(&WINDOW_SIZE, 400., 400.),
+                    glam::vec2(0.0, 0.0),
+                    glam::vec3(0.05, 0.05, 0.05),
+                );
 
-    // Physics System
-    let mut physics_system = PhysicsSystem::new();
+                self.physics_system
+                    .add_circle2(0.1, WorldPos2D::from_screen(&WINDOW_SIZE, 400., 400.));
 
-    // Vulkan Renderer
-    let mut renderer = Renderer::new(&window)?;
-    let mut res: Result<()> = Ok(());
+                self.physics_system
+                    .add_circle2(0.1, WorldPos2D::from_screen(&WINDOW_SIZE, 700., 700.));
 
-    // Random Generator
-    let mut rng = rand::thread_rng();
+                self.physics_system
+                    .add_circle2(0.1, WorldPos2D::from_screen(&WINDOW_SIZE, 100., 100.));
+            }
+            _ => (),
+        }
+    }
 
-    ///////////////// DEBUG /////////////////
-    let mut last_creation_pos: PhysicalPosition<f64> = PhysicalPosition::new(0.0, 0.0);
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        //  Physics System
+        self.physics_system.update();
 
-    physics_system.arena(
-        glm::vec2(10.0, 10.0),
-        glm::vec2(0.0, 0.0),
-        glm::vec2(0.0, 0.0),
-        glm::vec3(0.2, 0.2, 0.2),
-    );
+        // Request Redraw
+        self.window.as_ref().unwrap().request_redraw();
+    }
 
-    physics_system.circle(
-        0.1,
-        glm::vec2(0.0, 0.0),
-        glm::vec2(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0)),
-        glm::vec3(
-            rng.gen_range(0.0..1.0),
-            rng.gen_range(0.0..1.0),
-            rng.gen_range(0.0..1.0),
-        ),
-    );
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        self.handle_inputs(&event);
 
-    physics_system.circle(
-        0.1,
-        glm::vec2(-0.8, -0.8),
-        glm::vec2(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0)),
-        glm::vec3(
-            rng.gen_range(0.0..1.0),
-            rng.gen_range(0.0..1.0),
-            rng.gen_range(0.0..1.0),
-        ),
-    );
-
-    physics_system.circle(
-        0.1,
-        glm::vec2(0.8, 0.8),
-        glm::vec2(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0)),
-        glm::vec3(
-            rng.gen_range(0.0..1.0),
-            rng.gen_range(0.0..1.0),
-            rng.gen_range(0.0..1.0),
-        ),
-    );
-
-    ///////////////// DEBUG /////////////////
-
-    event_loop.run(move |event, _, control_flow| {
-        control_flow.set_poll();
         match event {
-            Event::MainEventsCleared => {
-                // Physics System
-                physics_system.update();
+            WindowEvent::CloseRequested => {
+                println!("Close was requested, stopping...");
+                event_loop.exit();
+            }
+            WindowEvent::RedrawRequested => {
+                // Create a renderer on the first request
+                if self.renderer.is_none() {
+                    if let Ok(renderer) = Renderer::new(&self.window.as_ref().unwrap()) {
+                        println!(
+                            "Renderer created with window handle: {:?}",
+                            &self.window.as_ref().unwrap().window_handle().unwrap()
+                        );
+                        self.renderer = Some(renderer);
+                    }
+                    return;
+                }
 
                 // Draw Objects From Physics System Models
-                for model in &physics_system.models {
+                for model in &self.physics_system.models {
                     match model.model_type {
                         ModelType::Circle(radius, color) => {
-                            renderer.circle(
+                            self.renderer.as_mut().unwrap().circle(
                                 radius * 2.0,
-                                model.position.x,
-                                model.position.y,
-                                color,
+                                model.position,
+                                color.0,
                                 AnchorType::Unlocked,
                             );
                         }
                         ModelType::Arena(x, y, color) => {
-                            renderer.rectangle(
+                            self.renderer.as_mut().unwrap().rectangle(
                                 x,
                                 y,
                                 0.0,
-                                model.position.x,
-                                model.position.y,
-                                color,
+                                model.position,
+                                color.0,
                                 AnchorType::Locked,
                             );
                         }
@@ -127,113 +126,94 @@ pub fn run() -> Result<()> {
                 }
 
                 // Renderer
-                res = control_flow.check_result(renderer.draw_request(&window));
+                self.renderer
+                    .as_mut()
+                    .unwrap()
+                    .draw_request(&self.window.as_ref().unwrap());
             }
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => control_flow.set_exit(),
-                WindowEvent::Resized(new_size) => {
-                    if new_size == window.inner_size() {
-                        window_size = new_size;
-                        res = control_flow.check_result(renderer.recreate_swapchain(new_size));
-                    }
+            WindowEvent::Resized(new_size) => {
+                println!(
+                    "Window resized... (w: {}, h: {})",
+                    new_size.width, new_size.height
+                );
+                if let Some(renderer) = self.renderer.as_mut() {
+                    renderer.recreate_swapchain(new_size);
                 }
-                WindowEvent::KeyboardInput { input, .. } => {
-                    if let Some(key) = input.virtual_keycode {
-                        match key {
-                            VirtualKeyCode::C if input.state == ElementState::Released => {
-                                let window_width = window_size.width as f64;
-                                let window_height = window_size.height as f64;
-
-                                let x = ((2.0 * (mouse_pos.x - center_pos.x) - window_width)
-                                    / window_width) as f32;
-                                let y = -((2.0 * (mouse_pos.y - center_pos.y) - window_height)
-                                    / window_height) as f32;
-
-                                physics_system.circle(
-                                    rng.gen_range(0.1..0.5),
-                                    glm::vec2(x, y),
-                                    glm::vec2(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0)),
-                                    glm::vec3(
-                                        rng.gen_range(0.0..1.0),
-                                        rng.gen_range(0.0..1.0),
-                                        rng.gen_range(0.0..1.0),
-                                    ),
-                                );
-                            }
-                            VirtualKeyCode::Space if input.state == ElementState::Released => {
-                                physics_system.switch_state()
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-                WindowEvent::MouseWheel { delta, .. } => {
-                    if let winit::event::MouseScrollDelta::LineDelta(_, dir) = delta {
-                        renderer.scene.zoom(dir * 0.1);
-                    }
-                }
-                WindowEvent::MouseInput { button, state, .. } => {
-                    if let MouseButton::Left = button {
-                        match state {
-                            ElementState::Pressed => {
-                                lmb_down = true;
-                                window.set_cursor_icon(CursorIcon::Grabbing)
-                            }
-                            ElementState::Released => {
-                                lmb_down = false;
-                                window.set_cursor_icon(CursorIcon::Default);
-                            }
-                        }
-                    }
-                }
-                WindowEvent::CursorMoved { position, .. } => {
-                    mouse_pos = position;
-
-                    if lmb_down {
-                        if let Some(last_position) = last_mouse_pos {
-                            let window_width = window_size.width as f64;
-                            let window_height = window_size.height as f64;
-
-                            let x = ((last_position.x - mouse_pos.x) / window_width) as f32;
-                            let y = ((last_position.y - mouse_pos.y) / window_height) as f32;
-
-                            renderer.scene.pan_view_xy(x, y);
-                            center_pos.x += x as f64;
-                            center_pos.y += y as f64;
-                        }
-
-                        last_mouse_pos = Some(position);
-                    } else {
-                        last_mouse_pos = None;
-                    }
-                }
-
-                _ => (),
-            },
-            // Event::DeviceEvent { event, .. } => match event {
-            //     DeviceEvent::MouseMotion { delta } => {}
-            //     _ => (),
-            // },
+            }
             _ => (),
         }
-    });
-
-    res
-}
-
-trait EventResult {
-    fn check_result(&mut self, result: Result<()>) -> Result<()> {
-        Ok(())
     }
 }
 
-impl EventResult for ControlFlow {
-    fn check_result(&mut self, result: Result<()>) -> Result<()> {
-        if let Err(e) = result {
-            self.set_exit();
-            return Err(e);
+impl InputHandler for App {
+    fn handle_inputs(&mut self, event: &winit::event::WindowEvent) {
+        use utils::input::Key;
+
+        self.inputs.read(event);
+
+        // Start / Stop Physics System
+        if self.inputs.just_pressed(Key::Space) {
+            self.physics_system.switch_state();
         }
 
-        Ok(())
+        // Create a new random sized circle at the mouse pos
+        if self.inputs.just_pressed(Key::C) {
+            if self.window.is_none() {
+                return;
+            }
+
+            let width = self.window_width().unwrap();
+            let height = self.window_height().unwrap();
+
+            let pos = self
+                .inputs
+                .mouse_pos()
+                .unwrap_or(glam::vec2(width / 2., height / 2.));
+
+            self.physics_system.add_circle2(
+                rand::random_range(0.1..0.5),
+                WorldPos2D::from_screen2(&self.window_size().unwrap(), pos),
+            );
+        }
     }
+}
+
+impl App {
+    pub fn window_width(&self) -> Option<f32> {
+        if let Some(window) = &self.window {
+            Some(window.inner_size().width as f32)
+        } else {
+            None
+        }
+    }
+
+    pub fn window_height(&self) -> Option<f32> {
+        if let Some(window) = &self.window {
+            Some(window.inner_size().height as f32)
+        } else {
+            None
+        }
+    }
+
+    pub fn window_size(&self) -> Option<PhysicalSize<u32>> {
+        if let Some(window) = &self.window {
+            Some(window.inner_size())
+        } else {
+            None
+        }
+    }
+}
+
+pub fn run() -> Result<()> {
+    let event_loop = EventLoop::new()?;
+    event_loop.set_control_flow(ControlFlow::Poll);
+
+    let mut app = App::default();
+    event_loop.run_app(&mut app);
+
+    if app.renderer.is_some() {
+        app.renderer.unwrap().wait_device_idle()?;
+    }
+
+    Ok(())
 }

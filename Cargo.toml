@@ -1,29 +1,47 @@
-[package]
-name = "lavapond"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = ["utils"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
 repository = "https://github.com/hokkonsz/lavapond"
 license = "MIT"
+
+[workspace.dependencies]
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
+glam = "0.30"
+
+
+[package]
+name = "lavapond"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
 publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+utils = { path = "../lavapond/utils", version = "0.1" }
+winit.workspace = true
+glam.workspace = true
 anyhow = "1.0"
-ash = "0.37"
-bytemuck = { version = "1.13",  features = ["extern_crate_std"] }
-gpu-allocator = "0.23"
-winit = "0.28"
-raw-window-handle = "0.5"
-ash-window = "0.12"
-nalgebra-glm = "0.18"
-rand = "0.8"
+ash = "0.38"
+bytemuck = { version = "1.23", features = ["extern_crate_std"] }
+gpu-allocator = "0.27"
+raw-window-handle = "0.6.2"
+ash-window = "0.13"
+nalgebra-glm = "0.19"
+rand = "0.9"
+time = "0.3"
 
 [features]
 default = ["render_dbg"]
 # Render Features
 render_dbg = ["validation_features"]
-validation_features = ["best_practices", "gpu_assist"] # <- Fill this with required validation features!
+validation_features = [
+	"best_practices",
+	"gpu_assist",
+] # <- Fill this with required validation features!
 # Validation Features List:
 best_practices = []
 debug_printf = []

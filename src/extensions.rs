@@ -3,11 +3,8 @@ use std::{borrow::Cow, ffi::CStr};
 
 // extern
 use anyhow::Result;
-use ash::{
-    extensions::{ext, khr},
-    vk,
-};
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use ash::{ext, khr, vk};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window;
 
 //==================================================
@@ -15,17 +12,17 @@ use winit::window;
 //==================================================
 
 pub struct DebugExtension {
-    pub loader: ext::DebugUtils,
+    pub loader: ext::debug_utils::Instance,
     pub messenger: vk::DebugUtilsMessengerEXT,
 }
 
 impl DebugExtension {
     /// Creates a new [`DebugExtension`]
     pub fn new(entry: &ash::Entry, instance: &ash::Instance) -> Result<Self> {
-        let loader = ext::DebugUtils::new(entry, instance);
+        let loader = ext::debug_utils::Instance::new(entry, instance);
 
         let messenger = {
-            let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+            let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
                 .message_severity(
                     vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
                         | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
@@ -52,19 +49,19 @@ unsafe extern "system" fn vulkan_debug_callback(
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
     _user_data: *mut std::os::raw::c_void,
 ) -> vk::Bool32 {
-    let callback_data = *p_callback_data;
+    let callback_data = unsafe { *p_callback_data };
     let message_id_number = callback_data.message_id_number;
 
     let message_id_name = if callback_data.p_message_id_name.is_null() {
         Cow::from("")
     } else {
-        CStr::from_ptr(callback_data.p_message_id_name).to_string_lossy()
+        unsafe { CStr::from_ptr(callback_data.p_message_id_name).to_string_lossy() }
     };
 
     let message = if callback_data.p_message.is_null() {
         Cow::from("")
     } else {
-        CStr::from_ptr(callback_data.p_message).to_string_lossy()
+        unsafe { CStr::from_ptr(callback_data.p_message).to_string_lossy() }
     };
 
     println!(
@@ -79,7 +76,7 @@ unsafe extern "system" fn vulkan_debug_callback(
 //==================================================
 
 pub struct SurfaceExtension {
-    pub loader: khr::Surface,
+    pub loader: khr::surface::Instance,
     pub surface: vk::SurfaceKHR,
 }
 
@@ -90,14 +87,14 @@ impl SurfaceExtension {
         instance: &ash::Instance,
         window: &window::Window,
     ) -> Result<Self> {
-        let loader = khr::Surface::new(&entry, &instance);
+        let loader = khr::surface::Instance::new(entry, instance);
 
         let surface = unsafe {
             ash_window::create_surface(
                 &entry,
                 &instance,
-                window.raw_display_handle(),
-                window.raw_window_handle(),
+                window.display_handle()?.as_raw(),
+                window.window_handle()?.as_raw(),
                 None,
             )
         }?;
@@ -111,21 +108,20 @@ impl SurfaceExtension {
 //==================================================
 
 pub struct SwapchainExtension {
-    pub loader: khr::Swapchain,
+    pub loader: khr::swapchain::Device,
     pub swapchain: vk::SwapchainKHR,
 }
 
 impl SwapchainExtension {
     /// Creates a new [`SwapchainExtension`]
     pub fn new(
-        entry: &ash::Entry,
         instance: &ash::Instance,
         logical_device: &ash::Device,
         physical_device: &vk::PhysicalDevice,
         surface_ext: &SurfaceExtension,
         window: &winit::window::Window,
     ) -> Result<Self> {
-        let loader = khr::Swapchain::new_from_instance(&entry, &instance, logical_device.handle());
+        let loader = khr::swapchain::Device::new(instance, logical_device);
 
         let swapchain = {
             let (min_image_count, pre_transform) = {
@@ -151,7 +147,7 @@ impl SwapchainExtension {
 
             // TODO! -> This is too strict/error prone right now, better to supplement with queried data
             // TODO! -> Check for defaults
-            let create_info = vk::SwapchainCreateInfoKHR::builder()
+            let create_info = vk::SwapchainCreateInfoKHR::default()
                 .surface(surface_ext.surface)
                 .min_image_count(min_image_count)
                 .image_format(vk::Format::B8G8R8A8_SRGB)

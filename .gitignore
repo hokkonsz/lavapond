@@ -1,5 +1,6 @@
 # Build Output
 /target
+/build
 
 # VSCode Files
 /.vscode
