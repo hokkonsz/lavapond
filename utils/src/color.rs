@@ -42,6 +42,21 @@ impl Color {
         ))
     }
 
+    /// Returns the red value
+    pub fn r(&self) -> f32 {
+        self.0.x
+    }
+
+    /// Returns the green value
+    pub fn g(&self) -> f32 {
+        self.0.y
+    }
+
+    /// Returns the blue value
+    pub fn b(&self) -> f32 {
+        self.0.z
+    }
+
     /// Returns a random sRGB color
     pub fn random() -> Self {
         Self(glam::vec3(

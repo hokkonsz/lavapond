@@ -4,6 +4,7 @@ use glam;
 use lavapond::AnchorType;
 use lavapond::{self, Renderer, coord_sys::WorldPos2D};
 use raw_window_handle::HasWindowHandle;
+use utils::color::Color;
 use utils::input::{InputHandler, Inputs};
 use utils::timer::Timer;
 use winit::{
@@ -73,7 +74,7 @@ impl ApplicationHandler for App {
         }
 
         if self.window.is_some() {
-            // self.handle_inputs(&event);
+            self.handle_inputs(&event);
         }
 
         match event {
@@ -84,7 +85,7 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 // Create a renderer on the first request
                 if self.renderer.is_none() {
-                    match Renderer::new(&self.window.as_ref().unwrap()) {
+                    match Renderer::new(&self.window.as_ref().unwrap(), Color::RAISIN) {
                         Ok(renderer) => {
                             println!(
                                 "Renderer created with window handle: {:?}",
@@ -150,9 +151,6 @@ impl InputHandler for App {
             self.physics_system.switch_state();
         }
 
-        if self.window.is_none() {
-            return;
-        }
         let window = self.window.as_ref().unwrap();
         let window_size = window.inner_size();
 

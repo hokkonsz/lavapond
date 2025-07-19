@@ -62,6 +62,7 @@ pub struct Renderer {
     graphics_pipeline: vk::Pipeline,
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
+    clear_color: [vk::ClearValue; 1],
     viewport: vk::Viewport,
     scissor: vk::Rect2D,
     #[allow(dead_code)]
@@ -96,14 +97,8 @@ pub struct Renderer {
 impl Renderer {
     const MAX_FRAMES_INFLIGHT: usize = 2;
 
-    const CLEAR_VALUES: [vk::ClearValue; 1] = [vk::ClearValue {
-        color: vk::ClearColorValue {
-            float32: [0.0, 0.0, 0.0, 1.0],
-        },
-    }];
-
     /// Creates a new [`Renderer`] using `window`
-    pub fn new(window: &winit::window::Window) -> Result<Renderer> {
+    pub fn new(window: &winit::window::Window, clear_color: Color) -> Result<Renderer> {
         // Pre Load Object Pool
         let object_pool = resources::preload()?;
 
@@ -178,6 +173,13 @@ impl Renderer {
             }
             image_views
         };
+
+        // Clear Color
+        let clear_color = [vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [clear_color.r(), clear_color.g(), clear_color.b(), 1.0],
+            },
+        }];
 
         // Descriptor
         let descriptor = Descriptor::new(&device.logical_device, Self::MAX_FRAMES_INFLIGHT)?;
@@ -334,6 +336,7 @@ impl Renderer {
             graphics_pipeline: graphics_pipeline.pipeline,
             graphics_queue,
             present_queue,
+            clear_color,
             viewport,
             scissor,
             push_constant_range,
@@ -495,20 +498,11 @@ impl Renderer {
         }
 
         /////////////////// STATISTICS DRAW ///////////////////
-        self.shape(
-            1.0,
-            1.0,
-            0.0,
-            WorldPos2D::from_xy(&window.inner_size(), 75., 75.),
-            Color::MIDNIGHT,
-            &ShapeType::RoundedRectangle,
-            AnchorType::Locked,
-        )?;
 
         self.text(
             &self.render_stats.as_text(),
             1.0,
-            WorldPos2D::from_xy(&window.inner_size(), 50., 50.),
+            WorldPos2D::from_xy(&window.inner_size(), 5., 5.),
             AnchorType::Locked,
         )?;
 
@@ -566,7 +560,7 @@ impl Renderer {
                         .context("Frame Buffer: Index out of bounds")?,
                 )
                 .render_area(self.scissor)
-                .clear_values(&Self::CLEAR_VALUES);
+                .clear_values(&self.clear_color);
 
             self.device.cmd_begin_render_pass(
                 self.draw_command_buffers[self.current_frame],
@@ -796,7 +790,7 @@ impl Renderer {
                     position: cursor_position,
                     scale: glam::vec3(scale, scale, 0.0),
                     object_index: char_index as usize,
-                    color: Color::GREEN,
+                    color: Color::EMERALD,
                     ..ObjectInstance::default()
                 });
             }
@@ -1306,7 +1300,7 @@ impl RenderStats {
     /// Gives back the current stats as a [`String`]
     fn as_text(&self) -> String {
         format!(
-            "[Statistics]\nfps: {}\nrequest time: {} us\npool creation time:{}\nelements:{}\nvertices:{}",
+            "fps: {}\nrequest time: {} us\npool creation time:{}\nelements:{}\nvertices:{}",
             self.frames_per_sec,
             self.last_draw_request_time,
             self.last_draw_pool_creation_time,

@@ -111,15 +111,9 @@ impl Inputs {
             }
             winit::event::WindowEvent::MouseInput { state, button, .. } => {
                 match button {
-                    winit::event::MouseButton::Left => {
-                        self.mouse_last_state.lmb = state.is_pressed()
-                    }
-                    winit::event::MouseButton::Right => {
-                        self.mouse_last_state.rmb = state.is_pressed()
-                    }
-                    winit::event::MouseButton::Middle => {
-                        self.mouse_last_state.lmb = state.is_pressed()
-                    }
+                    winit::event::MouseButton::Left => self.mouse_state.lmb = state.is_pressed(),
+                    winit::event::MouseButton::Right => self.mouse_state.rmb = state.is_pressed(),
+                    winit::event::MouseButton::Middle => self.mouse_state.lmb = state.is_pressed(),
                     _ => (),
                     // winit::event::MouseButton::Back
                     // winit::event::MouseButton::Forward
