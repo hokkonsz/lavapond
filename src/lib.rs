@@ -1,35 +1,34 @@
-#![allow(unused_mut)]
-
-// std
-use std::{
-    ffi::CStr,
-    time::{Duration, Instant},
-};
-
-// extern
-use anyhow::{Context, Ok, Result, anyhow};
-use ash::{
-    ext, khr, util,
-    vk::{self, DescriptorSet},
-};
-use glam;
-use raw_window_handle::HasDisplayHandle;
-use winit::dpi::PhysicalSize;
-
-// intern
 mod buffers;
-pub mod camera;
 mod descriptor;
 mod extensions;
 mod pipeline;
 mod resources;
 
-use buffers::*;
-use camera::*;
-use descriptor::*;
-use extensions::*;
-use pipeline::*;
-use resources::*;
+pub mod camera;
+pub mod coord_sys;
+pub mod shapes;
+
+use crate::buffers::*;
+use crate::camera::*;
+use crate::coord_sys::*;
+use crate::descriptor::*;
+use crate::extensions::*;
+use crate::pipeline::*;
+use crate::resources::*;
+use crate::shapes::*;
+use anyhow::{Context, Ok, Result, anyhow};
+use ash::{
+    ext, khr,
+    vk::{self, DescriptorSet},
+};
+use glam;
+use raw_window_handle::HasDisplayHandle;
+use std::{
+    ffi::CStr,
+    time::{Duration, Instant},
+};
+use utils::color::Color;
+use winit::dpi::PhysicalSize;
 
 //==================================================
 //=== Renderer
@@ -190,14 +189,14 @@ impl Renderer {
             .offset(0);
 
         // Viewport & Scissor
-        let mut viewport = vk::Viewport {
+        let viewport = vk::Viewport {
             width: window.inner_size().width as f32,
             height: window.inner_size().height as f32,
             max_depth: 1.0,
             ..Default::default()
         };
 
-        let mut scissor = vk::Rect2D {
+        let scissor = vk::Rect2D {
             extent: vk::Extent2D {
                 width: window.inner_size().width,
                 height: window.inner_size().height,
@@ -222,7 +221,7 @@ impl Renderer {
             Self::MAX_FRAMES_INFLIGHT as u32,
         )?;
 
-        let mut frame_buffer = buffers::FrameBuffer::new(
+        let frame_buffer = buffers::FrameBuffer::new(
             &device.logical_device,
             &image_views,
             &graphics_pipeline.render_pass,
@@ -496,19 +495,20 @@ impl Renderer {
         }
 
         /////////////////// STATISTICS DRAW ///////////////////
-        self.rectangle(
-            4.5,
-            1.75,
+        self.shape(
+            1.0,
+            1.0,
             0.0,
-            WorldPos2D::new(-1.7, 0.85),
-            glam::vec3(0.5, 0.5, 0.5),
+            WorldPos2D::from_xy(&window.inner_size(), 75., 75.),
+            Color::MIDNIGHT,
+            &ShapeType::RoundedRectangle,
             AnchorType::Locked,
         )?;
+
         self.text(
             &self.render_stats.as_text(),
             1.0,
-            -2.0,
-            1.0,
+            WorldPos2D::from_xy(&window.inner_size(), 50., 50.),
             AnchorType::Locked,
         )?;
 
@@ -636,7 +636,7 @@ impl Renderer {
 
             self.camera.update_projection(window);
 
-            let mut uniform_align = util::Align::new(
+            let mut uniform_align = ash::util::Align::new(
                 *self
                     .uniform_buffers_mapped
                     .get(self.current_frame)
@@ -750,13 +750,12 @@ impl Renderer {
 
     /* Creating Draw Instances */
 
-    /// Creates and pushes a text object to draw
+    /// Adds the characters of the text to the instance pool
     pub fn text(
         &mut self,
         text: &str,
         scale: f32,
-        top_left_x: f32,
-        top_left_y: f32,
+        top_left: WorldPos2D,
         anchor_type: AnchorType,
     ) -> Result<()> {
         // let scale = scale * self.scene.camera_zoom;
@@ -765,11 +764,11 @@ impl Renderer {
 
         let anchor_position = match anchor_type {
             AnchorType::Locked => glam::vec3(
-                top_left_x + self.camera.get_position().x + pad_x,
-                top_left_y + self.camera.get_position().y - pad_y,
+                top_left.x + self.camera.get_position().x + pad_x,
+                top_left.y + self.camera.get_position().y - pad_y,
                 0.0,
             ),
-            AnchorType::Unlocked => glam::vec3(top_left_x + pad_x, top_left_y - pad_y, 0.0),
+            AnchorType::Unlocked => glam::vec3(top_left.x + pad_x, top_left.y - pad_y, 0.0),
         };
 
         let mut char_index;
@@ -797,6 +796,7 @@ impl Renderer {
                     position: cursor_position,
                     scale: glam::vec3(scale, scale, 0.0),
                     object_index: char_index as usize,
+                    color: Color::GREEN,
                     ..ObjectInstance::default()
                 });
             }
@@ -810,45 +810,18 @@ impl Renderer {
         Ok(())
     }
 
-    /// Creates and pushes a circle object to draw
-    pub fn circle(
+    /// Adds a shape to the instance pool
+    pub fn shape(
         &mut self,
-        scale: f32,
-        center: WorldPos2D,
-        color: glam::Vec3,
-        anchor_type: AnchorType,
-    ) -> Result<()> {
-        let anchor_position = match anchor_type {
-            AnchorType::Locked => glam::vec3(
-                center.x + self.camera.get_position().x,
-                center.y + self.camera.get_position().y,
-                0.0,
-            ),
-            AnchorType::Unlocked => glam::vec3(center.x, center.y, 0.0),
-        };
-
-        self.draw_pool.push(ObjectInstance {
-            position: anchor_position,
-            rotation: 0.0, // <- Matters only if has a texture
-            scale: glam::vec3(scale, scale, 0.0),
-            color,
-            object_index: self.object_pool.pool.len() - 1,
-        });
-
-        Ok(())
-    }
-
-    /// Creates and pushes a rectangle object to draw
-    pub fn rectangle(
-        &mut self,
-        scale_x: f32,
-        scale_y: f32,
+        size_x: f32,
+        size_y: f32,
         rotation: f32,
         center: WorldPos2D,
-        color: glam::Vec3,
+        color: Color,
+        shape: &ShapeType,
         anchor_type: AnchorType,
     ) -> Result<()> {
-        let anchor_position = match anchor_type {
+        let position = match anchor_type {
             AnchorType::Locked => glam::vec3(
                 center.x + self.camera.get_position().x,
                 center.y + self.camera.get_position().y,
@@ -857,12 +830,21 @@ impl Renderer {
             AnchorType::Unlocked => glam::vec3(center.x, center.y, 0.0),
         };
 
+        let object_index = match shape {
+            ShapeType::Circle => ObjectPool::CIRCLE,
+            ShapeType::CircleBorder => ObjectPool::CIRCLE_BORDER,
+            ShapeType::Rectangle => ObjectPool::RECTANGLE,
+            ShapeType::RectangleBorder => ObjectPool::RECTANGLE_BORDER,
+            ShapeType::RoundedRectangle => ObjectPool::ROUNDED_RECTANGLE,
+            ShapeType::RoundedRectangleBorder => ObjectPool::ROUNDED_RECTANGLE_BORDER,
+        };
+
         self.draw_pool.push(ObjectInstance {
-            position: anchor_position,
-            rotation: rotation,
-            scale: glam::vec3(scale_x, scale_y, 0.0),
+            position,
+            rotation,
+            scale: glam::vec3(size_x, size_y, 0.0),
             color,
-            object_index: self.object_pool.pool.len() - 2,
+            object_index,
         });
 
         Ok(())
@@ -897,6 +879,20 @@ impl Renderer {
     }
 
     /* Misc */
+
+    pub fn add_shape(&mut self, shape: &impl Shape, anchor: AnchorType) -> Result<()> {
+        let draw_params = shape.get_drawparams();
+
+        self.shape(
+            draw_params.size_x(),
+            draw_params.size_y(),
+            draw_params.rotation(),
+            draw_params.center(),
+            draw_params.color(),
+            draw_params.shape_type(),
+            anchor,
+        )
+    }
 
     pub fn screen_to_world(&self, position: ScreenPos2D) -> WorldPos2D {
         let half_width = self.camera.get_width() * 0.5;
@@ -1003,7 +999,7 @@ pub fn create_instance(
     let application_info = vk::ApplicationInfo::default()
         .application_name(unsafe { CStr::from_bytes_with_nul_unchecked(b"lavapond\0") })
         .application_version(vk::make_api_version(0, 0, 1, 0))
-        .engine_name(unsafe { CStr::from_bytes_with_nul_unchecked(b"vulkan\0") })
+        .engine_name(unsafe { CStr::from_bytes_with_nul_unchecked(b"lavapond\0") })
         .engine_version(vk::make_api_version(0, 0, 1, 0))
         .api_version(api_version);
 
@@ -1065,6 +1061,8 @@ struct Device {
 }
 
 impl Device {
+    const EXTENSION_NAMES: [*const i8; 1] = [khr::swapchain::NAME.as_ptr()];
+
     // TODO! -> This is too strict right now, better to rank surface properties
     // TODO! -> Capability Support: image count + image extent
 
@@ -1088,11 +1086,19 @@ impl Device {
             // unsafe { instance.get_physical_device_features(*pd) }
 
             /* Extension Properties */
-            if !(unsafe { instance.enumerate_device_extension_properties(pd) }?
-                .into_iter()
-                .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == khr::swapchain::NAME)) {
-					continue;
-				}
+            let mut extensions_found = 0;
+            for ep in unsafe { instance.enumerate_device_extension_properties(pd) }? {
+                let extension_name = unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) };
+                for required_name in Device::EXTENSION_NAMES {
+                    if extension_name == unsafe { CStr::from_ptr(required_name) } {
+                        extensions_found += 1;
+                    }
+                }
+            }
+
+            if extensions_found < Device::EXTENSION_NAMES.len() {
+                continue;
+            }
 
             /* Surface Capability */
             // unsafe { surface.get_physical_device_surface_capabilities(*pd, surface_khr) }?
@@ -1209,11 +1215,9 @@ impl Device {
                 //     .queue_priorities(&queue_priority),
             ];
 
-            let extension_names = [khr::swapchain::NAME.as_ptr()];
-
             let create_info = vk::DeviceCreateInfo::default()
                 .queue_create_infos(&queue_create_infos)
-                .enabled_extension_names(&extension_names);
+                .enabled_extension_names(&Device::EXTENSION_NAMES);
 
             unsafe { instance.create_device(physical_device, &create_info, None) }?
         };
@@ -1316,6 +1320,9 @@ impl RenderStats {
 //=== Draw Instance
 //==================================================
 
+/// Locked = Object moves with the camera
+///
+/// Unlocked = Object does not moves with the camera
 pub enum AnchorType {
     Locked,
     Unlocked,
@@ -1323,7 +1330,7 @@ pub enum AnchorType {
 
 pub struct DrawInstanceData {
     transform: glam::Mat4,
-    color: glam::Vec3,
+    color: Color,
 }
 
 impl DrawInstanceData {
@@ -1334,7 +1341,7 @@ impl DrawInstanceData {
     pub fn new_empty() -> Self {
         Self {
             transform: glam::Mat4::ZERO,
-            color: glam::Vec3::ZERO,
+            color: Color::BLACK,
         }
     }
 

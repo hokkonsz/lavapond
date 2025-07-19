@@ -1,4 +1,3 @@
-// extern
 use anyhow::{Context, Result};
 use ash::vk;
 

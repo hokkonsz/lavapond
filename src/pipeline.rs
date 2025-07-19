@@ -1,9 +1,7 @@
-// std
-use std::ffi::CStr;
-
-// extern
 use anyhow::{Context, Ok, Result};
 use ash::vk;
+use std::ffi::CStr;
+use utils::color::Color;
 
 //==================================================
 //=== Graphics Pipeline
@@ -73,15 +71,15 @@ impl GraphicsPipeline {
 
         let vertex_attribute_descriptions = [
             vk::VertexInputAttributeDescription::default()
-                .binding(0)
                 .location(0)
+                .binding(0)
                 .format(vk::Format::R32G32B32_SFLOAT)
                 .offset(0),
             vk::VertexInputAttributeDescription::default()
-                .binding(0)
                 .location(1)
+                .binding(0)
                 .format(vk::Format::R32G32B32_SFLOAT)
-                .offset((std::mem::size_of::<[f32; 3]>()) as u32),
+                .offset((std::mem::size_of::<Color>()) as u32),
         ];
 
         let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::default()

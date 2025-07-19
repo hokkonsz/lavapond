@@ -4,6 +4,15 @@ pub struct Timer {
     duration: std::time::Duration,
 }
 
+impl Default for Timer {
+    fn default() -> Self {
+        Self {
+            start_time: std::time::Instant::now(),
+            duration: Default::default(),
+        }
+    }
+}
+
 impl Timer {
     /// Create a new Timer
     pub fn new() -> Self {

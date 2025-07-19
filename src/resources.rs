@@ -1,11 +1,7 @@
-#![allow(dead_code)]
-
-// std
-use std::io::BufRead;
-
-// extern
-use anyhow::{Ok, Result};
+use anyhow::Result;
 use glam;
+use std::io::BufRead;
+use utils::color::Color;
 
 //==================================================
 //=== Object
@@ -22,13 +18,35 @@ pub struct ObjectPool {
     pub pool: Vec<ObjectData>,
 }
 
+impl ObjectPool {
+    pub const CIRCLE: usize = 52;
+    pub const CIRCLE_BORDER: usize = 53;
+    pub const ROUNDED_RECTANGLE: usize = 54;
+    pub const RECTANGLE_BORDER: usize = 55;
+    pub const ROUNDED_RECTANGLE_BORDER: usize = 56;
+    pub const RECTANGLE: usize = 57;
+
+    fn print_loaded_objects(&self) {
+        for (i, object) in self.pool.iter().enumerate() {
+            println!("{}. {} loaded", i, object.name);
+        }
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct ObjectInstance {
     pub position: glam::Vec3,
     pub rotation: f32,
     pub scale: glam::Vec3,
-    pub color: glam::Vec3,
+    pub color: Color,
     pub object_index: usize,
+}
+
+impl ObjectInstance {
+    pub fn with_color(mut self, color: Color) -> Self {
+        self.color = color;
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -44,6 +62,15 @@ pub struct Vertex {
     pub color: [f32; 3],
 }
 
+impl Vertex {
+    pub fn from_xy(x: f32, y: f32) -> Self {
+        Self {
+            position: [x, y, 0.0],
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Clone, Default)]
 struct VertexColor {
     pub name: String,
@@ -52,7 +79,13 @@ struct VertexColor {
 
 /// Preload Object Pool
 pub fn preload() -> Result<ObjectPool> {
-    load_obj_files(&["chars", "rectangle", "circle"])
+    let pool = load_obj_files(&["chars", "shapes"]);
+
+    if let Ok(pool) = &pool {
+        pool.print_loaded_objects();
+    }
+
+    pool
 }
 
 /// Load .obj file without .mtl file
@@ -82,22 +115,19 @@ pub fn load_obj_files(obj_names: &[&str]) -> Result<ObjectPool> {
             if let Some(text) = curr_line.get(..2) {
                 match text {
                     "o " => {
-                        //"o Test_Cube.001" -> "X_Cube.001"
-                        if let Some(object_text) = curr_line.split(' ').next_back() {
-                            //"X_Cube.001" -> "X"
-                            if let Some(object_name) = object_text.chars().next() {
-                                // First Object -> Skip Save
-                                if object_data.name.len() == 0 {
-                                    object_data.name = object_name.to_string();
-                                    continue;
-                                }
-
-                                // Save
-                                pool.push(object_data.clone());
+                        //"o object_name" -> "object_name"
+                        if let Some(object_name) = curr_line.split(' ').next_back() {
+                            // First Object -> Skip Save
+                            if object_data.name.len() == 0 {
                                 object_data.name = object_name.to_string();
-                                object_data.index_offset += object_data.index_count;
-                                object_data.index_count = 0;
+                                continue;
                             }
+
+                            // Save
+                            pool.push(object_data.clone());
+                            object_data.name = object_name.to_string();
+                            object_data.index_offset += object_data.index_count;
+                            object_data.index_count = 0;
                         }
                     }
                     "v " => {
@@ -128,7 +158,6 @@ pub fn load_obj_files(obj_names: &[&str]) -> Result<ObjectPool> {
                             }
 
                             index = value.parse::<u16>()? - 1;
-
                             indices.push(object_index_offset as u16 + index);
                         }
 
@@ -449,9 +478,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_load_2obj() {
-        let obj = load_obj_files(&["box", "box", "box"]).unwrap();
+    fn test_load_multiple_objects() {
+        let obj = load_obj_files(&["shapes"]).unwrap();
 
-        dbg!(obj);
+        assert_eq!(obj.pool.len(), 6);
     }
 }

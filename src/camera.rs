@@ -1,5 +1,5 @@
-use std::ops::{Add, AddAssign};
-
+use crate::coord_sys::*;
+use ash::ext::headless_surface;
 use glam;
 
 pub struct Camera {
@@ -22,6 +22,8 @@ impl Camera {
         );
         let view_projection = ViewProjection::new(&position, &projection_type, &projection_params);
 
+        dbg!(view_projection);
+
         Self {
             position,
             view_projection,
@@ -31,23 +33,18 @@ impl Camera {
     }
 
     /// Shift the camera position on the X and Y axis
-    pub fn shift(&mut self, delta_x: f32, delta_y: f32) -> () {
-        self.position = glam::vec3(
-            self.position.x + delta_x,
-            self.position.y - delta_y,
-            self.position.z,
-        );
+    pub fn shift(&mut self, delta_pos: WorldPos2D) -> () {
+        self.position.x += delta_pos.x;
+        self.position.y += delta_pos.y;
 
         self.view_projection.view = glam::Mat4::look_at_rh(
             self.position,                                     // Camera Position
             glam::vec3(self.position.x, self.position.y, 0.0), // Camera Target
-            glam::vec3(0.0, 1.0, 0.0),
+            glam::Vec3::Y,
         );
     }
 
     /// Updates the projection matrix of the camera
-    ///
-    /// If the camera is fix then we do not need to call this function
     pub fn update_projection(&mut self, window: &winit::window::Window) {
         if self.projection_params.width == window.inner_size().width as f32
             && self.projection_params.height == window.inner_size().height as f32
@@ -110,19 +107,25 @@ impl Projection {
         };
 
         #[cfg(feature = "render_dbg")]
-        if projection.y_axis.y >= 0.0 {
-            eprintln!(
-                "WARNING: y_axis.y created with non negative value: ({})!",
-                projection.y_axis.y
+        {
+            println!(
+                "Orthographic projection changed to: (l: {:.2}, r: {:.2}, b: {:.2}, t: {:.2})",
+                -left_plane, right_plane, bottom_plane, top_plane
             );
-        }
 
-        #[cfg(feature = "render_dbg")]
-        if near_plane >= far_plane {
-            eprintln!(
-                "WARNING: near is smaller than far ({} >= {})!",
-                near_plane, far_plane
-            );
+            if projection.y_axis.y >= 0.0 {
+                eprintln!(
+                    "WARNING: y_axis.y created with non negative value: ({})!",
+                    projection.y_axis.y
+                );
+            }
+
+            if near_plane >= far_plane {
+                eprintln!(
+                    "WARNING: near is greater than far ({} >= {})!",
+                    near_plane, far_plane
+                );
+            }
         }
 
         Self(projection)
@@ -132,16 +135,22 @@ impl Projection {
         let projection = glam::Mat4::perspective_rh_gl(aspect, rotation, near, far);
 
         #[cfg(feature = "render_dbg")]
-        if projection.y_axis.y >= 0.0 {
-            eprintln!(
-                "WARNING: y_axis.y created with non negative value: ({})!",
-                projection.y_axis.y
+        {
+            println!(
+                "Perspective projection changed to: (a: {:.2}, r: {:.2}, n: {:.2}, f: {:.2})",
+                aspect, rotation, near, far
             );
-        }
 
-        #[cfg(feature = "render_dbg")]
-        if near >= far {
-            eprintln!("WARNING: near is smaller than far ({} >= {})!", near, far);
+            if projection.y_axis.y >= 0.0 {
+                eprintln!(
+                    "WARNING: y_axis.y created with non negative value: ({})!",
+                    projection.y_axis.y
+                );
+            }
+
+            if near >= far {
+                eprintln!("WARNING: near is greater than far ({} >= {})!", near, far);
+            }
         }
 
         Self(projection)
@@ -215,115 +224,15 @@ pub struct ProjectionParams {
 impl ProjectionParams {
     fn orthographic(&self) -> Projection {
         if self.width > self.height {
-            Projection::orthographic(
-                -1.,
-                1.,
-                self.height / self.width,
-                -self.height / self.width,
-                self.near,
-                self.far,
-            )
+            let right = self.width / self.height;
+            Projection::orthographic(-right, right, 1.0, -1.0, self.near, self.far)
         } else {
-            Projection::orthographic(
-                -self.width / self.height,
-                self.width / self.height,
-                1.,
-                -1.,
-                self.near,
-                self.far,
-            )
+            let bottom = self.height / self.width;
+            Projection::orthographic(-1.0, 1.0, bottom, -bottom, self.near, self.far)
         }
     }
 
     fn perspective(&self) -> Projection {
         Projection::perspective(self.width / self.height, self.rotation, self.near, self.far)
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct ScreenPos2D(glam::Vec2);
-
-impl std::ops::Deref for ScreenPos2D {
-    type Target = glam::Vec2;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for ScreenPos2D {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl ScreenPos2D {
-    pub fn new(x: f32, y: f32) -> Self {
-        Self(glam::vec2(x, y))
-    }
-
-    pub fn from_world(window_size: &winit::dpi::PhysicalSize<u32>, x: f32, y: f32) -> Self {
-        let half_width = window_size.width as f32 * 0.5;
-        let half_height = window_size.height as f32 * 0.5;
-        let x = (x * half_width) + half_width;
-        let y = (y * half_height) + half_height;
-
-        Self::new(x, y)
-    }
-
-    pub fn from_world2(window_size: &winit::dpi::PhysicalSize<u32>, position: glam::Vec2) -> Self {
-        let half_width = window_size.width as f32 * 0.5;
-        let half_height = window_size.height as f32 * 0.5;
-        let x = (position.x * half_width) + half_width;
-        let y = (position.y * half_height) + half_height;
-
-        Self::new(x, y)
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct WorldPos2D(glam::Vec2);
-
-impl std::ops::Deref for WorldPos2D {
-    type Target = glam::Vec2;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for WorldPos2D {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl WorldPos2D {
-    pub fn new(x: f32, y: f32) -> Self {
-        Self(glam::vec2(x, y))
-    }
-
-    pub fn from_screen(window_size: &winit::dpi::PhysicalSize<u32>, x: f32, y: f32) -> Self {
-        let half_width = window_size.width as f32 * 0.5;
-        let half_height = window_size.height as f32 * 0.5;
-        let x = (x - half_width) / half_width;
-        let y = (y - half_height) / half_height;
-
-        Self::new(x, y)
-    }
-
-    pub fn from_screen2(window_size: &winit::dpi::PhysicalSize<u32>, position: glam::Vec2) -> Self {
-        let half_width = window_size.width as f32 * 0.5;
-        let half_height = window_size.height as f32 * 0.5;
-        let x = (position.x - half_width) / half_width;
-        let y = (position.y - half_height) / half_height;
-
-        Self::new(x, y)
-    }
-}
-
-impl AddAssign<glam::Vec2> for WorldPos2D {
-    fn add_assign(&mut self, rhs: glam::Vec2) {
-        self.0 += rhs;
     }
 }

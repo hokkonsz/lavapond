@@ -10,3 +10,4 @@ publish = false
 [dependencies]
 winit.workspace = true
 glam.workspace = true
+rand.workspace = true

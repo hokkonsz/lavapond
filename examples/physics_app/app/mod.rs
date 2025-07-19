@@ -1,7 +1,11 @@
-// extern
+use crate::physics::PhysicsSystem;
 use anyhow::Result;
 use glam;
+use lavapond::AnchorType;
+use lavapond::{self, Renderer, coord_sys::WorldPos2D};
 use raw_window_handle::HasWindowHandle;
+use utils::input::{InputHandler, Inputs};
+use utils::timer::Timer;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -15,20 +19,14 @@ const WINDOW_SIZE: PhysicalSize<u32> = PhysicalSize {
     height: 600,
 };
 
-// intern
-use crate::physics::{ModelType, PhysicsSystem};
-use lavapond::{
-    self, AnchorType, Renderer,
-    camera::{ScreenPos2D, WorldPos2D},
-};
-use utils::input::{InputHandler, Inputs};
-
 #[derive(Default)]
 struct App {
     window: Option<Window>,
     renderer: Option<Renderer>,
     physics_system: PhysicsSystem,
+    timer: Timer,
     inputs: Inputs,
+    error: Option<anyhow::Error>,
 }
 
 impl ApplicationHandler for App {
@@ -44,30 +42,18 @@ impl ApplicationHandler for App {
         );
     }
 
-    fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
         match cause {
             StartCause::Init => {
-                self.physics_system.arena(
-                    glam::vec2(5.0, 5.0),
-                    WorldPos2D::from_screen(&WINDOW_SIZE, 400., 400.),
-                    glam::vec2(0.0, 0.0),
-                    glam::vec3(0.05, 0.05, 0.05),
-                );
-
+                self.timer.set_hz(10);
                 self.physics_system
-                    .add_circle2(0.1, WorldPos2D::from_screen(&WINDOW_SIZE, 400., 400.));
-
-                self.physics_system
-                    .add_circle2(0.1, WorldPos2D::from_screen(&WINDOW_SIZE, 700., 700.));
-
-                self.physics_system
-                    .add_circle2(0.1, WorldPos2D::from_screen(&WINDOW_SIZE, 100., 100.));
+                    .bounding_box(WorldPos2D::new(0.0, 0.0), 0.0, 1.0, 1.0);
             }
             _ => (),
         }
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         //  Physics System
         self.physics_system.update();
 
@@ -78,10 +64,17 @@ impl ApplicationHandler for App {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        window_id: winit::window::WindowId,
+        _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        self.handle_inputs(&event);
+        if self.error.is_some() {
+            event_loop.exit();
+            return;
+        }
+
+        if self.window.is_some() {
+            // self.handle_inputs(&event);
+        }
 
         match event {
             WindowEvent::CloseRequested => {
@@ -91,38 +84,38 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 // Create a renderer on the first request
                 if self.renderer.is_none() {
-                    if let Ok(renderer) = Renderer::new(&self.window.as_ref().unwrap()) {
-                        println!(
-                            "Renderer created with window handle: {:?}",
-                            &self.window.as_ref().unwrap().window_handle().unwrap()
-                        );
-                        self.renderer = Some(renderer);
+                    match Renderer::new(&self.window.as_ref().unwrap()) {
+                        Ok(renderer) => {
+                            println!(
+                                "Renderer created with window handle: {:?}",
+                                &self.window.as_ref().unwrap().window_handle().unwrap()
+                            );
+                            self.renderer = Some(renderer);
+                        }
+                        Err(err) => {
+                            self.error = Some(err);
+                        }
                     }
+
+                    // Initialize physics system after renderer is created
+                    self.physics_system
+                        .add_circle2(0.1, WorldPos2D::from_xy(&WINDOW_SIZE, 400., 300.));
+
+                    self.physics_system
+                        .add_circle2(0.1, WorldPos2D::from_xy(&WINDOW_SIZE, 700., 75.));
+
+                    self.physics_system
+                        .add_circle2(0.1, WorldPos2D::from_xy(&WINDOW_SIZE, 100., 525.));
+
                     return;
                 }
 
                 // Draw Objects From Physics System Models
+                let renderer = self.renderer.as_mut().unwrap();
+                let bb = &self.physics_system.bounding_box;
+                renderer.add_shape(bb, AnchorType::Unlocked);
                 for model in &self.physics_system.models {
-                    match model.model_type {
-                        ModelType::Circle(radius, color) => {
-                            self.renderer.as_mut().unwrap().circle(
-                                radius * 2.0,
-                                model.position,
-                                color.0,
-                                AnchorType::Unlocked,
-                            );
-                        }
-                        ModelType::Arena(x, y, color) => {
-                            self.renderer.as_mut().unwrap().rectangle(
-                                x,
-                                y,
-                                0.0,
-                                model.position,
-                                color.0,
-                                AnchorType::Locked,
-                            );
-                        }
-                    }
+                    renderer.add_shape(model, AnchorType::Unlocked);
                 }
 
                 // Renderer
@@ -133,9 +126,10 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(new_size) => {
                 println!(
-                    "Window resized... (w: {}, h: {})",
+                    "Window resized: (w: {}, h: {})",
                     new_size.width, new_size.height
                 );
+
                 if let Some(renderer) = self.renderer.as_mut() {
                     renderer.recreate_swapchain(new_size);
                 }
@@ -156,50 +150,41 @@ impl InputHandler for App {
             self.physics_system.switch_state();
         }
 
+        if self.window.is_none() {
+            return;
+        }
+        let window = self.window.as_ref().unwrap();
+        let window_size = window.inner_size();
+
         // Create a new random sized circle at the mouse pos
         if self.inputs.just_pressed(Key::C) {
-            if self.window.is_none() {
-                return;
-            }
-
-            let width = self.window_width().unwrap();
-            let height = self.window_height().unwrap();
-
-            let pos = self
-                .inputs
-                .mouse_pos()
-                .unwrap_or(glam::vec2(width / 2., height / 2.));
+            let pos = self.inputs.mouse_pos().unwrap_or(glam::vec2(
+                window_size.width as f32 / 2.,
+                window_size.height as f32 / 2.,
+            ));
 
             self.physics_system.add_circle2(
                 rand::random_range(0.1..0.5),
-                WorldPos2D::from_screen2(&self.window_size().unwrap(), pos),
+                WorldPos2D::from_vec2(&window_size, pos),
             );
         }
-    }
-}
 
-impl App {
-    pub fn window_width(&self) -> Option<f32> {
-        if let Some(window) = &self.window {
-            Some(window.inner_size().width as f32)
-        } else {
-            None
+        if self.renderer.is_none() || !self.timer.is_repeating() {
+            return;
         }
-    }
+        let renderer = self.renderer.as_mut().unwrap();
 
-    pub fn window_height(&self) -> Option<f32> {
-        if let Some(window) = &self.window {
-            Some(window.inner_size().height as f32)
-        } else {
-            None
+        // Move Camera
+        if self.inputs.held_down(Key::W) {
+            renderer.camera.shift(WorldPos2D::new(0.0, -0.01));
+        } else if self.inputs.just_pressed(Key::S) {
+            renderer.camera.shift(WorldPos2D::new(0.0, 0.01));
         }
-    }
 
-    pub fn window_size(&self) -> Option<PhysicalSize<u32>> {
-        if let Some(window) = &self.window {
-            Some(window.inner_size())
-        } else {
-            None
+        if self.inputs.just_pressed(Key::A) {
+            renderer.camera.shift(WorldPos2D::new(0.01, 0.0));
+        } else if self.inputs.just_pressed(Key::D) {
+            renderer.camera.shift(WorldPos2D::new(-0.01, 0.0));
         }
     }
 }
@@ -209,10 +194,14 @@ pub fn run() -> Result<()> {
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = App::default();
-    event_loop.run_app(&mut app);
+    event_loop.run_app(&mut app)?;
 
-    if app.renderer.is_some() {
-        app.renderer.unwrap().wait_device_idle()?;
+    if let Some(renderer) = app.renderer {
+        renderer.wait_device_idle()?;
+    }
+
+    if let Some(error) = app.error {
+        return Result::Err(error);
     }
 
     Ok(())

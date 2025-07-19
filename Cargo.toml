@@ -10,6 +10,7 @@ license = "MIT"
 [workspace.dependencies]
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 glam = "0.30"
+rand = "0.9"
 
 
 [package]
@@ -24,14 +25,13 @@ publish = false
 utils = { path = "../lavapond/utils", version = "0.1" }
 winit.workspace = true
 glam.workspace = true
+rand.workspace = true
 anyhow = "1.0"
 ash = "0.38"
 bytemuck = { version = "1.23", features = ["extern_crate_std"] }
 gpu-allocator = "0.27"
 raw-window-handle = "0.6.2"
 ash-window = "0.13"
-nalgebra-glm = "0.19"
-rand = "0.9"
 time = "0.3"
 
 [features]
