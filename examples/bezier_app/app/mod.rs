@@ -1,8 +1,6 @@
 use crate::bezier::Bezier;
 use anyhow::Result;
-use glam;
 use lavapond::AnchorType;
-use lavapond::coord_sys::ScreenPos2D;
 use lavapond::shapes::ShapeType;
 use lavapond::{self, Renderer, coord_sys::WorldPos2D};
 use raw_window_handle::HasWindowHandle;
@@ -11,7 +9,7 @@ use utils::input::{InputHandler, Inputs};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::{StartCause, WindowEvent},
+    event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::Window,
 };
