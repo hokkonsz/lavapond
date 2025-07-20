@@ -1,5 +1,4 @@
-use crate::coord_sys::*;
-use ash::ext::headless_surface;
+use crate::coord_sys::{self, *};
 use glam;
 
 pub struct Camera {
@@ -223,13 +222,8 @@ pub struct ProjectionParams {
 
 impl ProjectionParams {
     fn orthographic(&self) -> Projection {
-        if self.width > self.height {
-            let right = self.width / self.height;
-            Projection::orthographic(-right, right, 1.0, -1.0, self.near, self.far)
-        } else {
-            let bottom = self.height / self.width;
-            Projection::orthographic(-1.0, 1.0, bottom, -bottom, self.near, self.far)
-        }
+        let (right, bottom) = coord_sys::world(self.width, self.height);
+        Projection::orthographic(-right, right, bottom, -bottom, self.near, self.far)
     }
 
     fn perspective(&self) -> Projection {

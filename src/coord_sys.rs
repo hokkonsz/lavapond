@@ -1,3 +1,5 @@
+use std::sync::atomic;
+
 /// ### Screen coordinate system
 ///
 /// - Origin = Top-left corner
@@ -11,7 +13,7 @@
 /// //  0,h |_________| w,h
 /// ```
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct ScreenPos2D(glam::Vec2);
+pub struct ScreenPos2D(pub glam::Vec2);
 
 impl std::ops::Deref for ScreenPos2D {
     type Target = glam::Vec2;
@@ -54,6 +56,19 @@ impl ScreenPos2D {
         Self::convert(window_size, world_position.x, world_position.y)
     }
 
+    pub fn distance_screen(&self, screen_position: ScreenPos2D) -> Self {
+        Self::new(self.x - screen_position.x, self.y - screen_position.y)
+    }
+
+    pub fn distance_world(
+        &self,
+        window_size: &winit::dpi::PhysicalSize<u32>,
+        world_position: WorldPos2D,
+    ) -> Self {
+        let world_to_screen = ScreenPos2D::from_world_pos(window_size, world_position);
+        Self::new(self.x - world_to_screen.x, self.y - world_to_screen.y)
+    }
+
     fn convert(window_size: &winit::dpi::PhysicalSize<u32>, world_x: f32, world_y: f32) -> Self {
         // screen origo is on the top left cornert
         // screen_left = 0, screen_top = 0
@@ -81,6 +96,7 @@ impl ScreenPos2D {
 /// ### World coordinate system
 ///
 /// Equivalent of an Y flipped Vulkan coordinate system
+/// Scaled by BASE_SIZE parameter on WorldPos2D
 ///
 ///
 /// ```
@@ -91,7 +107,7 @@ impl ScreenPos2D {
 ///
 /// ```
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct WorldPos2D(glam::Vec2);
+pub struct WorldPos2D(pub glam::Vec2);
 
 impl std::ops::Deref for WorldPos2D {
     type Target = glam::Vec2;
@@ -134,6 +150,19 @@ impl WorldPos2D {
         Self::convert(window_size, screen_position.x, screen_position.y)
     }
 
+    pub fn distance_world(&self, world_position: WorldPos2D) -> Self {
+        Self::new(self.x - world_position.x, self.y - world_position.y)
+    }
+
+    pub fn distance_screen(
+        &self,
+        window_size: &winit::dpi::PhysicalSize<u32>,
+        screen_position: ScreenPos2D,
+    ) -> Self {
+        let screen_to_world = WorldPos2D::from_screen_pos(window_size, screen_position);
+        Self::new(self.x - screen_to_world.x, self.y - screen_to_world.y)
+    }
+
     fn convert(window_size: &winit::dpi::PhysicalSize<u32>, screen_x: f32, screen_y: f32) -> Self {
         // screen origo is on the top left cornert
         // screen_left = 0, screen_top = 0
@@ -164,18 +193,32 @@ impl std::ops::AddAssign<glam::Vec2> for WorldPos2D {
     }
 }
 
+static WORLD_SIZE_X: atomic::AtomicUsize = atomic::AtomicUsize::new(1000);
+static WORLD_SIZE_Y: atomic::AtomicUsize = atomic::AtomicUsize::new(1000);
+
+/// Sets world size to given x and y
+pub fn set_world_size(x: usize, y: usize) {
+    WORLD_SIZE_X.store(x, atomic::Ordering::Relaxed);
+    WORLD_SIZE_Y.store(y, atomic::Ordering::Relaxed);
+}
+
 type Right = f32;
 type Top = f32;
-fn world(width: f32, height: f32) -> (Right, Top) {
+/// Given the width and height of screen,
+/// returns the right and top planes on world
+pub fn world(width: f32, height: f32) -> (Right, Top) {
+    let x = WORLD_SIZE_X.load(atomic::Ordering::Relaxed) as f32;
+    let y = WORLD_SIZE_Y.load(atomic::Ordering::Relaxed) as f32;
+
     if width > height {
-        (width / height, 1.0)
+        (width / height * x, y)
     } else {
-        (1.0, height / width)
+        (x, height / width * y)
     }
 }
 
 #[test]
-fn test_world_pos_2d() {
+fn test_coords() {
     use crate::WorldPos2D;
     use winit::dpi::PhysicalSize;
 

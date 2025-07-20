@@ -1,7 +1,7 @@
 use crate::physics::PhysicsSystem;
 use anyhow::Result;
 use glam;
-use lavapond::AnchorType;
+use lavapond::draw::AnchorType;
 use lavapond::{self, Renderer, coord_sys::WorldPos2D};
 use raw_window_handle::HasWindowHandle;
 use utils::color::Color;
@@ -48,7 +48,7 @@ impl ApplicationHandler for App {
             StartCause::Init => {
                 self.timer.set_hz(10);
                 self.physics_system
-                    .bounding_box(WorldPos2D::new(0.0, 0.0), 0.0, 1.0, 1.0);
+                    .bounding_box(WorldPos2D::new(0.0, 0.0), 0.0, 1000.0, 1000.0);
             }
             _ => (),
         }
@@ -100,13 +100,13 @@ impl ApplicationHandler for App {
 
                     // Initialize physics system after renderer is created
                     self.physics_system
-                        .add_circle2(0.1, WorldPos2D::from_xy(&WINDOW_SIZE, 400., 300.));
+                        .add_circle2(50., WorldPos2D::from_xy(&WINDOW_SIZE, 400., 300.));
 
                     self.physics_system
-                        .add_circle2(0.1, WorldPos2D::from_xy(&WINDOW_SIZE, 700., 75.));
+                        .add_circle2(100., WorldPos2D::from_xy(&WINDOW_SIZE, 700., 75.));
 
                     self.physics_system
-                        .add_circle2(0.1, WorldPos2D::from_xy(&WINDOW_SIZE, 100., 525.));
+                        .add_circle2(25., WorldPos2D::from_xy(&WINDOW_SIZE, 100., 525.));
 
                     return;
                 }

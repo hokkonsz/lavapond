@@ -1,15 +1,9 @@
 use anyhow::Result;
-use glam;
 use std::io::BufRead;
-use utils::color::Color;
 
 //==================================================
 //=== Object
 //==================================================
-
-const COLOR_WHITE: [f32; 3] = [1.0, 1.0, 1.0];
-const COLOR_GRAY: [f32; 3] = [0.5, 0.5, 0.5];
-const COLOR_BLACK: [f32; 3] = [0.0, 0.0, 0.0];
 
 #[derive(Debug)]
 pub struct ObjectPool {
@@ -33,22 +27,6 @@ impl ObjectPool {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct ObjectInstance {
-    pub position: glam::Vec3,
-    pub rotation: f32,
-    pub scale: glam::Vec3,
-    pub color: Color,
-    pub object_index: usize,
-}
-
-impl ObjectInstance {
-    pub fn with_color(mut self, color: Color) -> Self {
-        self.color = color;
-        self
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct ObjectData {
     pub name: String,
@@ -56,10 +34,19 @@ pub struct ObjectData {
     pub index_offset: usize,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct Vertex {
-    pub position: [f32; 3],
+    pub position: [f32; 3], // TODO! Change to [f32;2], Buffer Description Info needs to be updated!
     pub color: [f32; 3],
+}
+
+impl Default for Vertex {
+    fn default() -> Self {
+        Self {
+            position: Default::default(),
+            color: [1.0, 1.0, 1.0],
+        }
+    }
 }
 
 impl Vertex {
@@ -71,11 +58,11 @@ impl Vertex {
     }
 }
 
-#[derive(Clone, Default)]
-struct VertexColor {
-    pub name: String,
-    pub color: [f32; 3],
-}
+// #[derive(Clone, Default)]
+// struct VertexColor {
+//     pub name: String,
+//     pub color: [f32; 3],
+// }
 
 /// Preload Object Pool
 pub fn preload() -> Result<ObjectPool> {
@@ -98,10 +85,7 @@ pub fn load_obj_files(obj_names: &[&str]) -> Result<ObjectPool> {
     let mut indices = Vec::new();
     let mut pool = Vec::new();
 
-    let mut vertex = Vertex {
-        color: COLOR_WHITE,
-        ..Vertex::default()
-    };
+    let mut vertex = Vertex::default();
     let mut index;
     let mut object_index_offset = 0;
     let mut object_data = ObjectData::default();
@@ -182,154 +166,153 @@ pub fn load_obj_files(obj_names: &[&str]) -> Result<ObjectPool> {
 }
 
 /// Load a single .obj file with .mtl file
-pub fn load_obj_with_mtl(obj_name: &str) -> Result<ObjectPool> {
-    let mut curr_line;
+// pub fn load_obj_with_mtl(obj_name: &str) -> Result<ObjectPool> {
+//     let mut curr_line;
 
-    /* 1. Load Colors */
+//     /* 1. Load Colors */
 
-    let mut color_pool = Vec::new();
+//     let mut color_pool = Vec::new();
 
-    let mut vertex_color = VertexColor::default();
+//     let mut vertex_color = VertexColor::default();
 
-    let path = format!("res/obj/{}.mtl", obj_name);
-    let file = std::fs::File::open(path)?;
-    for line in std::io::BufReader::new(file).lines() {
-        curr_line = line?;
+//     let path = format!("res/obj/{}.mtl", obj_name);
+//     let file = std::fs::File::open(path)?;
+//     for line in std::io::BufReader::new(file).lines() {
+//         curr_line = line?;
 
-        if let Some(text) = curr_line.get(..2) {
-            match text {
-                "ne" => {
-                    //newmtl Name -> Name
-                    if let Some(color_name) = curr_line.split(' ').next_back() {
-                        vertex_color.name = color_name.to_string();
-                    }
-                }
-                "Kd" => {
-                    //Kd 0.8 0.8 0.8 -> [0.8, 0.8, 0.8]
-                    for (i, value) in curr_line.split(' ').enumerate() {
-                        if i == 0 {
-                            continue;
-                        }
+//         if let Some(text) = curr_line.get(..2) {
+//             match text {
+//                 "ne" => {
+//                     //newmtl Name -> Name
+//                     if let Some(color_name) = curr_line.split(' ').next_back() {
+//                         vertex_color.name = color_name.to_string();
+//                     }
+//                 }
+//                 "Kd" => {
+//                     //Kd 0.8 0.8 0.8 -> [0.8, 0.8, 0.8]
+//                     for (i, value) in curr_line.split(' ').enumerate() {
+//                         if i == 0 {
+//                             continue;
+//                         }
 
-                        if i > 3 {
-                            break;
-                        }
+//                         if i > 3 {
+//                             break;
+//                         }
 
-                        vertex_color.color[i - 1] = value.parse::<f32>()?;
-                    }
-                }
-                "Ks" => {
-                    //Ks should come after Kd
-                    color_pool.push(vertex_color.clone());
-                }
-                _ => (),
-            }
-        }
-    }
+//                         vertex_color.color[i - 1] = value.parse::<f32>()?;
+//                     }
+//                 }
+//                 "Ks" => {
+//                     //Ks should come after Kd
+//                     color_pool.push(vertex_color.clone());
+//                 }
+//                 _ => (),
+//             }
+//         }
+//     }
 
-    /* 2. Load Vertices/Indices & Fill Object Pool*/
+//     /* 2. Load Vertices/Indices & Fill Object Pool*/
 
-    let mut vertices = Vec::new();
-    let mut indices = Vec::new();
-    let mut pool = Vec::new();
+//     let mut vertices = Vec::new();
+//     let mut indices = Vec::new();
+//     let mut pool = Vec::new();
 
-    let mut vertex = Vertex::default();
-    let mut index;
-    let mut object_data = ObjectData::default();
+//     let mut vertex = Vertex::default();
+//     let mut index;
+//     let mut object_data = ObjectData::default();
 
-    let path = format!("res/obj/{}.obj", obj_name);
-    let file = std::fs::File::open(path)?;
-    for line in std::io::BufReader::new(file).lines() {
-        curr_line = line?;
+//     let path = format!("res/obj/{}.obj", obj_name);
+//     let file = std::fs::File::open(path)?;
+//     for line in std::io::BufReader::new(file).lines() {
+//         curr_line = line?;
 
-        if let Some(text) = curr_line.get(..2) {
-            match text {
-                "o " => {
-                    //"o Test_Cube.001" -> "Test_Cube.001"
-                    if let Some(object_text) = curr_line.split(' ').next_back() {
-                        //"Test_Cube.001" -> "Test"
-                        if let Some(object_name) = object_text.split("_").next() {
-                            // First Object -> Skip Save
-                            if object_data.name.len() == 0 {
-                                object_data.name = object_name.to_string();
-                                continue;
-                            }
+//         if let Some(text) = curr_line.get(..2) {
+//             match text {
+//                 "o " => {
+//                     //"o Test_Cube.001" -> "Test_Cube.001"
+//                     if let Some(object_text) = curr_line.split(' ').next_back() {
+//                         //"Test_Cube.001" -> "Test"
+//                         if let Some(object_name) = object_text.split("_").next() {
+//                             // First Object -> Skip Save
+//                             if object_data.name.len() == 0 {
+//                                 object_data.name = object_name.to_string();
+//                                 continue;
+//                             }
 
-                            // Save
-                            pool.push(object_data.clone());
-                            object_data.name = object_name.to_string();
-                            object_data.index_offset += object_data.index_count;
-                            object_data.index_count = 0;
-                        }
-                    }
-                }
-                "v " => {
-                    //"v 0.000000 0.000000 -7.000000" -> [0.0, 0.0, -7.0]
-                    for (i, value) in curr_line.split(' ').enumerate() {
-                        if i == 0 {
-                            continue;
-                        }
+//                             // Save
+//                             pool.push(object_data.clone());
+//                             object_data.name = object_name.to_string();
+//                             object_data.index_offset += object_data.index_count;
+//                             object_data.index_count = 0;
+//                         }
+//                     }
+//                 }
+//                 "v " => {
+//                     //"v 0.000000 0.000000 -7.000000" -> [0.0, 0.0, -7.0]
+//                     for (i, value) in curr_line.split(' ').enumerate() {
+//                         if i == 0 {
+//                             continue;
+//                         }
 
-                        if i > 3 {
-                            break;
-                        }
+//                         if i > 3 {
+//                             break;
+//                         }
 
-                        vertex.position[i - 1] = value.parse::<f32>()?;
-                    }
+//                         vertex.position[i - 1] = value.parse::<f32>()?;
+//                     }
 
-                    vertices.push(vertex);
-                }
-                "us" => {
-                    //"usemtl MaterialName" -> MaterialName
-                    if let Some(color_name) = curr_line.split(' ').next_back() {
-                        for color in &color_pool {
-                            if color.name == color_name {
-                                vertex_color.color = color.color;
-                            }
-                        }
-                    }
-                }
-                "f " => {
-                    //"f 18 7 1" -> [18, 7, 1]
-                    for (i, value) in curr_line.split(' ').enumerate() {
-                        if i == 0 {
-                            continue;
-                        }
+//                     vertices.push(vertex);
+//                 }
+//                 "us" => {
+//                     //"usemtl MaterialName" -> MaterialName
+//                     if let Some(color_name) = curr_line.split(' ').next_back() {
+//                         for color in &color_pool {
+//                             if color.name == color_name {
+//                                 vertex_color.color = color.color;
+//                             }
+//                         }
+//                     }
+//                 }
+//                 "f " => {
+//                     //"f 18 7 1" -> [18, 7, 1]
+//                     for (i, value) in curr_line.split(' ').enumerate() {
+//                         if i == 0 {
+//                             continue;
+//                         }
 
-                        if i > 3 {
-                            break;
-                        }
+//                         if i > 3 {
+//                             break;
+//                         }
 
-                        index = value.parse::<u16>()? - 1;
+//                         index = value.parse::<u16>()? - 1;
 
-                        vertices[index as usize].color = vertex_color.color;
+//                         vertices[index as usize].color = vertex_color.color;
 
-                        indices.push(index);
-                    }
+//                         indices.push(index);
+//                     }
 
-                    object_data.index_count += 3;
-                }
-                _ => (),
-            }
-        }
-    }
+//                     object_data.index_count += 3;
+//                 }
+//                 _ => (),
+//             }
+//         }
+//     }
 
-    // Save Last Object
-    pool.push(object_data);
+//     // Save Last Object
+//     pool.push(object_data);
 
-    Ok(ObjectPool {
-        indices,
-        vertices,
-        pool,
-    })
-}
+//     Ok(ObjectPool {
+//         indices,
+//         vertices,
+//         pool,
+//     })
+// }
 
 //==================================================
 //=== Text
 //==================================================
 
 // This maps the ASCII Char decimal number to the objects in char.obj
-// Probably can be compile time filled with proc macro, i think...
 // Special Cases:
 // [#]      [Draw]
 // 255  ->  Nothing
@@ -462,12 +445,6 @@ pub const CHAR_OBJECT_POOL: [u8; 255] = [
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
     255, 255, 255, 255, 255, 255, 255, 255,
 ];
-
-//==================================================
-//=== Shapes
-//==================================================
-
-// TODO! -> Primitive shapes like Circle/Rectangle/Triangle
 
 //==================================================
 //=== Unit Testing

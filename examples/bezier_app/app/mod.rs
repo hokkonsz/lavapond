@@ -1,11 +1,12 @@
 use crate::bezier::Bezier;
 use anyhow::Result;
-use lavapond::AnchorType;
+use lavapond::draw::AnchorType;
 use lavapond::shapes::ShapeType;
 use lavapond::{self, Renderer, coord_sys::WorldPos2D};
 use raw_window_handle::HasWindowHandle;
 use utils::color::Color;
 use utils::input::{InputHandler, Inputs};
+use winit::event::StartCause;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -42,6 +43,13 @@ impl ApplicationHandler for App {
                 )
                 .unwrap(),
         );
+    }
+
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
+        match cause {
+            StartCause::Init => {}
+            _ => (),
+        }
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
@@ -247,6 +255,8 @@ impl InputHandler for App {
 pub fn run() -> Result<()> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
+
+    lavapond::coord_sys::set_world_size(1, 1);
 
     let mut app = App::default();
     event_loop.run_app(&mut app)?;
